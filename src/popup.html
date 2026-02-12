@@ -239,7 +239,30 @@
 
 						</div>
 					</div>
-
+					<div class="my-4 pt-4 border-t border-gray-200">
+						<div class="flex items-center justify-between mb-2">
+							<div class="flex items-center">
+								<input type="checkbox" id="aiSummary" class="form-checkbox text-blue-600">
+								<label for="aiSummary" class="font-medium text-sm flex items-center" style="margin-left: 4px;">
+									Enable AI Summary
+								</label>
+								<span class="tooltip-container">
+									<i class="fa fa-question-circle question-icon"></i>
+									<span class="tooltip-bubble">
+										Generates a summary using AI. Requires API Key in Settings.
+									</span>
+								</span>
+							</div>
+						</div>
+						
+						<div class="flex items-center justify-between gap-2">
+							<label for="aiTone" class="font-medium text-sm whitespace-nowrap">Tone:</label>
+							<select id="aiTone" class="w-full border-2 border-gray-200 bg-gray-200 rounded-xl text-gray-800 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+								<option value="official">Official</option>
+								<option value="concise">Concise</option>
+							</select>
+						</div>
+					</div>
 					<div>
 						<div>
 							<h6 class="text-base font-semibold mt-2" data-i18n="scrumReportLabel">Scrum Report</h6>
@@ -311,6 +334,22 @@
 							<input id="githubToken" type="password"
 								class="w-full border-2 border-gray-200 bg-gray-200 rounded-xl text-gray-800 p-2 my-2 pr-10"
 								data-i18n-placeholder="githubTokenPlaceholder">
+							<div class="mt-4">
+								<div class="flex items-center justify-between">
+									<div class="flex">
+										<p class="text-sm font-medium">AI API Key</p>
+										<span class="tooltip-container">
+											<i class="fa fa-question-circle question-icon"></i>
+											<span class="tooltip-bubble">
+												Required for AI Summary features. The key is stored locally.
+											</span>
+										</span>
+									</div>
+								</div>
+								<input id="aiApiKey" type="password"
+									class="w-full border-2 border-gray-200 bg-gray-200 rounded-xl text-gray-800 p-2 my-2 pr-10"
+									placeholder="sk-...">
+							</div>
 						</div>
 						<div class="githubOnlySection">
 							<div class="flex items-center mt-4">
