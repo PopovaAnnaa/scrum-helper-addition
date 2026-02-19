@@ -101,7 +101,12 @@
     "onlyRevPRsTooltip": {
         "message": "Если отмечено, отчёт будет включать только PR, проверенные вами."
     },
-
+    "onlyMergedPRsLabel": {
+    "message": "Включать в отчет только слитые (Merged) PR"
+    },
+    "onlyMergedPRsTooltip": {
+        "message": "Если отмечено, в отчет попадут только те Pull Requests, которые были успешно слиты (merged) с основной веткой."
+    },
     "cacheTTLLabel": {
         "message": "Введите TTL кеша",
         "description": "Метка для ввода времени жизни кеша."

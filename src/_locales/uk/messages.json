@@ -202,5 +202,11 @@
     },
     "usernameLabel": {
         "message": "Ваше ім'я користувача"
+    },
+    "onlyMergedPRsLabel": {
+    "message": "Включити до звіту тільки злиті (Merged) PR"
+    },
+    "onlyMergedPRsTooltip": {
+        "message": "Якщо позначено, до звіту потраплять лише ті Pull Requests, які були успішно злиті (merged) з основною гілкою."
     }
 }
