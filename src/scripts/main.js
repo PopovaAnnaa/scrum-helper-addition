@@ -8,10 +8,40 @@ const yesterdayContributionElement = document.getElementById('yesterdayContribut
 const startingDateElement = document.getElementById('startingDate');
 const endingDateElement = document.getElementById('endingDate');
 const showOpenLabelElement = document.getElementById('showOpenLabel');
+const aiSummaryElement = document.getElementById('aiSummary');
+const aiToneElement = document.getElementById('aiTone');
+const aiApiKeyElement = document.getElementById('aiApiKey');
+const generateReportButton = document.getElementById('generateReport');
 
 const userReasonElement = null;
 
 const showCommitsElement = document.getElementById('showCommits');
+
+const ENCRYPTION_SECRET = 'scrum_helper_secure_key';
+
+function encryptApiKey(text) {
+    if (!text) return '';
+    let result = '';
+    for (let i = 0; i < text.length; i++) {
+        result += String.fromCharCode(text.charCodeAt(i) ^ ENCRYPTION_SECRET.charCodeAt(i % ENCRYPTION_SECRET.length));
+    }
+    return btoa(result);
+}
+
+function decryptApiKey(encodedText) {
+    if (!encodedText) return '';
+    try {
+        const text = atob(encodedText); 
+        let result = '';
+        for (let i = 0; i < text.length; i++) {
+            result += String.fromCharCode(text.charCodeAt(i) ^ ENCRYPTION_SECRET.charCodeAt(i % ENCRYPTION_SECRET.length));
+        }
+        return result;
+    } catch (e) {
+        console.error("Failed to decrypt API Key");
+        return '';
+    }
+}
 
 function handleBodyOnLoad() {
 	// Migration: Handle existing users with old platformUsername storage
@@ -44,6 +74,9 @@ function handleBodyOnLoad() {
 			'githubToken',
 			'gitlabToken',
 			'showCommits',
+			'aiSummary',
+			'aiTone',
+			'aiApiKey',
 		],
 		(items) => {
 			// Load platform-specific username
@@ -99,6 +132,16 @@ function handleBodyOnLoad() {
 				showCommitsElement.checked = false;
 				handleShowCommitsChange();
 			}
+
+			if (items.aiSummary !== undefined && aiSummaryElement) {
+                aiSummaryElement.checked = items.aiSummary;
+            }
+            if (items.aiTone && aiToneElement) {
+                aiToneElement.value = items.aiTone;
+            }
+            if (items.aiApiKey && aiApiKeyElement) {
+                aiApiKeyElement.value = decryptApiKey(items.aiApiKey);
+            }
 		},
 	);
 }
@@ -204,6 +247,47 @@ function handleShowCommitsChange() {
 	chrome.storage.local.set({ showCommits: value });
 }
 
+function handleAiSummaryChange() {
+	chrome.storage.local.set({ aiSummary: aiSummaryElement.checked });
+}
+
+function handleAiToneChange() {
+	chrome.storage.local.set({ aiTone: aiToneElement.value });
+}
+
+function handleAiApiKeyChange() {
+	const encryptedKey = encryptApiKey(aiApiKeyElement.value.trim());
+	chrome.storage.local.set({ aiApiKey: encryptedKey });
+}
+
+function validateAiSettings() {
+    if (!aiSummaryElement.checked) return true;
+
+    const apiKey = aiApiKeyElement.value.trim();
+    
+    if (!apiKey) {
+        alert("To use AI Summary, you must specify the AI API Key in the settings.");
+        return false;
+    }
+
+    if (!apiKey.startsWith("sk-")) {
+        const confirmProceed = confirm("Your API key should normally start with ‘sk-’. Are you sure you want to continue?");
+        if (!confirmProceed) return false;
+    }
+
+    return true;
+}
+
+if (generateReportButton) {
+    generateReportButton.addEventListener('click', (e) => {
+        if (!validateAiSettings()) {
+            return; 
+        }
+        
+        console.log("Validation passed! Starting report generation...");
+    });
+}
+
 enableToggleElement.addEventListener('change', handleEnableChange);
 platformUsernameElement.addEventListener('keyup', handlePlatformUsernameChange);
 if (githubTokenElement) {
@@ -221,3 +305,7 @@ yesterdayContributionElement.addEventListener('change', handleYesterdayContribut
 showOpenLabelElement.addEventListener('change', handleOpenLabelChange);
 
 document.addEventListener('DOMContentLoaded', handleBodyOnLoad);
+
+if (aiSummaryElement) aiSummaryElement.addEventListener('change', handleAiSummaryChange);
+if (aiToneElement) aiToneElement.addEventListener('change', handleAiToneChange);
+if (aiApiKeyElement) aiApiKeyElement.addEventListener('input', handleAiApiKeyChange);
