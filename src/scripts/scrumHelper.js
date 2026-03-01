@@ -58,6 +58,7 @@ function allIncluded(outputTarget = 'email') {
 	let onlyIssues = false;
 	let onlyPRs = false;
 	let onlyRevPRs = false;
+	let onlyMergedPRs = false;
 
 	const pr_open_button =
 		'<div style="vertical-align:middle;display: inline-block;padding: 0px 4px;font-size:9px;font-weight: 600;color: #fff;text-align: center;background-color: #2cbe4e;border-radius: 3px;line-height: 12px;margin-bottom: 2px;"  class="State State--green">open</div>';
@@ -102,6 +103,7 @@ function allIncluded(outputTarget = 'email') {
 				'onlyIssues',
 				'onlyPRs',
 				'onlyRevPRs',
+				'onlyMergedPRs'
 			],
 			(items) => {
 				console.log('[DEBUG] Storage items received:', items);
@@ -149,6 +151,7 @@ function allIncluded(outputTarget = 'email') {
 				onlyIssues = items.onlyIssues === true;
 				onlyPRs = items.onlyPRs === true;
 				onlyRevPRs = items.onlyRevPRs === true;
+				onlyMergedPRs = items.onlyMergedPRs === true;
 				console.log('[SCRUM-DEBUG] loaded flags:', { onlyIssues, onlyPRs, onlyRevPRs });
 				// Enforce mutual exclusivity between onlyIssues and onlyPRs to avoid filtering out everything
 				if (onlyIssues && onlyPRs) {
@@ -1395,7 +1398,7 @@ ${userReason}`;
 	}
 
 	async function writeGithubIssuesPrs(items) {
-		const isAnyFilterActive = onlyIssues || onlyPRs || onlyRevPRs;
+		const isAnyFilterActive = onlyIssues || onlyPRs || onlyRevPRs || onlyMergedPRs;
 		if (!items) {
 			return;
 		}
@@ -1481,7 +1484,7 @@ ${userReason}`;
 			const isMR = !!item.pull_request; // works for both GitHub and mapped GitLab data
 
 			if (isAnyFilterActive) {
-				if (isMR && !onlyPRs) {
+				if (isMR && !onlyPRs && !onlyMergedPRs) {
 					log('[SCRUM-DEBUG] Filters active, skipping PR because onlyPRs is not checked:', item.number);
 					continue;
 				}
@@ -1513,7 +1516,19 @@ ${userReason}`;
 			if (isMR) {
 				// Platform-specific label
 				let prAction = '';
-
+				
+				let merged = null;
+				if ((githubToken || (useMergedStatus && !fallbackToSimple)) && mergedStatusResults) {
+					const repoParts = repository_url.split('/');
+					const owner = repoParts[repoParts.length - 2];
+					const repo = repoParts[repoParts.length - 1];
+					merged = mergedStatusResults[`${owner}/${repo}#${number}`];
+				}
+				if (onlyMergedPRs && merged !== true) {
+					console.log(`[SCRUM-DEBUG] Выкидываем PR #${number}, так как галочка стоит, а PR не merged!`);
+					continue;
+				}
+				
 				const prCreatedDate = new Date(item.created_at);
 
 				// Get the correct date range for filtering
@@ -1603,13 +1618,6 @@ ${userReason}`;
 				} else if (platform === 'gitlab' && item.state === 'closed') {
 					li = `<li><i>(${project})</i> - ${prAction} <a href='${html_url}' target='_blank' rel='noopener noreferrer' contenteditable='false'>(#${number})</a> - <a href='${html_url}' target='_blank' rel='noopener noreferrer' contenteditable='false'>${title}</a>${showOpenLabel ? ' ' + pr_closed_button : ''}</li>`;
 				} else {
-					let merged = null;
-					if ((githubToken || (useMergedStatus && !fallbackToSimple)) && mergedStatusResults) {
-						const repoParts = repository_url.split('/');
-						const owner = repoParts[repoParts.length - 2];
-						const repo = repoParts[repoParts.length - 1];
-						merged = mergedStatusResults[`${owner}/${repo}#${number}`];
-					}
 					if (merged === true) {
 						li = `<li><i>(${project})</i> - ${prAction} <a href='${html_url}' target='_blank' rel='noopener noreferrer' contenteditable='false'>(#${number})</a> - <a href='${html_url}' target='_blank' rel='noopener noreferrer' contenteditable='false'>${title}</a>${showOpenLabel ? ' ' + pr_merged_button : ''}</li>`;
 					} else {
