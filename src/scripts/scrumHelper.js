@@ -1525,7 +1525,7 @@ ${userReason}`;
 					merged = mergedStatusResults[`${owner}/${repo}#${number}`];
 				}
 				if (onlyMergedPRs && merged !== true) {
-					console.log(`[SCRUM-DEBUG] Выкидываем PR #${number}, так как галочка стоит, а PR не merged!`);
+					console.log(`[SCRUM-DEBUG] Skipping PR #${number} because onlyMergedPRs is active and PR is not merged.`);
 					continue;
 				}
 				
