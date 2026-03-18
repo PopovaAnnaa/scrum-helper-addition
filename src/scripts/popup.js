@@ -633,10 +633,16 @@ document.addEventListener('DOMContentLoaded', () => {
 			onlyIssuesCheckbox.addEventListener('change', () => {
 				const checked = onlyIssuesCheckbox.checked;
 				chrome.storage.local.set({ onlyIssues: checked }, () => {
-					if (checked && onlyPRsCheckbox.checked) {
-						// Uncheck the previously selected "Only PRs"
-						onlyPRsCheckbox.checked = false;
-						chrome.storage.local.set({ onlyPRs: false });
+					// Uncheck the previously selected "Only PRs" or "Only Merged PRs"
+					if (checked) {
+						if (onlyPRsCheckbox.checked) {
+							onlyPRsCheckbox.checked = false;
+							chrome.storage.local.set({ onlyPRs: false });
+						}
+						if (onlyMergedPRsCheckbox && onlyMergedPRsCheckbox.checked) {
+							onlyMergedPRsCheckbox.checked = false;
+							chrome.storage.local.set({ onlyMergedPRs: false });
+						}
 					}
 				});
 			});
@@ -651,6 +657,19 @@ document.addEventListener('DOMContentLoaded', () => {
 					}
 				});
 			});
+
+			if (onlyMergedPRsCheckbox) {
+				onlyMergedPRsCheckbox.addEventListener('change', () => {
+					const checked = onlyMergedPRsCheckbox.checked;
+					chrome.storage.local.set({ onlyMergedPRs: checked }, () => {
+						if (checked && onlyIssuesCheckbox.checked) {
+							// Uncheck the previously selected "Only Issues"
+							onlyIssuesCheckbox.checked = false;
+							chrome.storage.local.set({ onlyIssues: false });
+						}
+					});
+				});
+			}
 
 			if (onlyRevPRsCheckbox) {
 				onlyRevPRsCheckbox.addEventListener('change', () => {
