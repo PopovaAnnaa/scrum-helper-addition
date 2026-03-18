@@ -1019,10 +1019,15 @@ function allIncluded(outputTarget = 'email') {
 		log('[DEBUG] Both data processing functions completed, generating scrum body');
 		if (subjectForEmail) {
 			// Synchronized subject and body injection for email
-			let lastWeekUl = '<ul>';
-			for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
-			for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
-			lastWeekUl += '</ul>';
+			let lastWeekUl = '';
+            if (lastWeekArray.length === 0 && reviewedPrsArray.length === 0) {
+                lastWeekUl = '<div style="padding: 10px 0 10px 20px; color: #666; font-style: italic;">📭 No activity found for this period.</div>';
+            } else {
+                lastWeekUl = '<ul>';
+                for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
+                for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
+                lastWeekUl += '</ul>';
+            }
 			let nextWeekUl = '<ul>';
 			for (let i = 0; i < nextWeekArray.length; i++) nextWeekUl += nextWeekArray[i];
 			nextWeekUl += '</ul>';
@@ -1066,10 +1071,15 @@ function allIncluded(outputTarget = 'email') {
 			return;
 		}
 
-		let lastWeekUl = '<ul>';
-		for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
-		for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
-		lastWeekUl += '</ul>';
+		let lastWeekUl = '';
+        if (lastWeekArray.length === 0 && reviewedPrsArray.length === 0) {
+                lastWeekUl = '<p style="color: #666; font-style: italic;">No activity found for this period.</p>';
+        } else {
+            lastWeekUl = '<ul>';
+            for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
+            for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
+            lastWeekUl += '</ul>';
+        }
 
 		let nextWeekUl = '<ul>';
 		for (let i = 0; i < nextWeekArray.length; i++) nextWeekUl += nextWeekArray[i];
