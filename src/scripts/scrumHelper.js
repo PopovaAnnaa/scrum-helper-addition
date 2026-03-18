@@ -645,19 +645,50 @@ function allIncluded(outputTarget = 'email') {
 				throw new Error(errorMsg);
 			}
 
-			const [issuesRes, prRes, userRes] = await Promise.all([
-				fetch(issueUrl, { headers }),
-				fetch(prUrl, { headers }),
-				userCheckRes, // Reuse the already validated user response
-			]);
+			async function fetchAllGithubPages(baseUrl, headers) {
+				let allItems = [];
+				let page = 1;
+				let hasNextPage = true;
 
-			if (issuesRes.status === 401 || prRes.status === 401 || issuesRes.status === 403 || prRes.status === 403) {
+				while (hasNextPage) {
+					const url = `${baseUrl}&page=${page}`;
+					const response = await fetch(url, { headers });
+
+					if (!response.ok) {
+						console.error('[SCRUM-HELPER] Error fetching GitHub data:', response.status);
+						break;
+					}
+
+					const data = await response.json();
+					
+					if (data && data.items && data.items.length > 0) {
+						allItems = allItems.concat(data.items);
+					
+						const linkHeader = response.headers.get('Link');
+						if (linkHeader && linkHeader.includes('rel="next"')) {
+							page++;
+						} else {
+							hasNextPage = false;
+						}
+					} else {
+						hasNextPage = false;
+					}
+				}
+				return { items: allItems };
+			}
+
+			githubIssuesData = await fetchAllGithubPages(issueUrl, headers);
+
+			const prRes = await fetch(prUrl, { headers });
+        	const userRes = userCheckRes;
+
+			if (prRes.status === 401 || prRes.status === 403) {
 				showInvalidTokenMessage();
 				githubCache.fetching = false;
 				return;
 			}
 
-			if (issuesRes.status === 422 || prRes.status === 422) {
+			if (prRes.status === 422) {
 				const errorMsg = `Invalid search query or date range. Please verify your date range format and try again.`;
 				logError(errorMsg);
 				if (outputTarget === 'popup') {
@@ -666,14 +697,6 @@ function allIncluded(outputTarget = 'email') {
 				throw new Error(errorMsg);
 			}
 
-			if (!issuesRes.ok) {
-				const errorMsg = `Error fetching GitHub issues: ${issuesRes.status} ${issuesRes.statusText}`;
-				logError(errorMsg);
-				if (outputTarget === 'popup') {
-					Materialize.toast && Materialize.toast(errorMsg, 4000);
-				}
-				throw new Error(errorMsg);
-			}
 			if (!prRes.ok) {
 				const errorMsg = `Error fetching GitHub PR review data: ${prRes.status} ${prRes.statusText}`;
 				logError(errorMsg);
@@ -688,7 +711,6 @@ function allIncluded(outputTarget = 'email') {
 				throw new Error(errorMsg);
 			}
 
-			githubIssuesData = await issuesRes.json();
 			githubPrsReviewData = await prRes.json();
 			githubUserData = await userRes.json();
 
