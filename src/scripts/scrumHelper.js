@@ -152,11 +152,15 @@ function allIncluded(outputTarget = 'email') {
 				onlyPRs = items.onlyPRs === true;
 				onlyRevPRs = items.onlyRevPRs === true;
 				onlyMergedPRs = items.onlyMergedPRs === true;
-				console.log('[SCRUM-DEBUG] loaded flags:', { onlyIssues, onlyPRs, onlyRevPRs });
+				console.log('[SCRUM-DEBUG] loaded flags:', { onlyIssues, onlyPRs, onlyRevPRs, onlyMergedPRs });
 				// Enforce mutual exclusivity between onlyIssues and onlyPRs to avoid filtering out everything
 				if (onlyIssues && onlyPRs) {
 					console.warn('[SCRUM-HELPER]: Detected both onlyIssues and onlyPRs enabled; normalizing to onlyIssues.');
 					onlyPRs = false;
+				}
+				if (onlyIssues && onlyMergedPRs) {
+					console.warn('[SCRUM-HELPER]: Detected both onlyIssues and onlyMergedPRs enabled; normalizing to onlyIssues.');
+					onlyMergedPRs = false;
 				}
 				showCommits = items.showCommits || false;
 				showOpenLabel = items.showOpenLabel !== false; // Default to true if not explicitly set to false
@@ -1481,7 +1485,7 @@ ${userReason}`;
 			const item = items[i];
 			log('[SCRUM-DEBUG] Processing item:', item);
 			// For GitLab, treat all items in the MRs array as MRs
-			const isMR = !!item.pull_request; // works for both GitHub and mapped GitLab data
+			const isMR = (platform === 'gitlab') ? (!!item.iid && !!item.project_id && !item.issue_type) : !!item.pull_request; // works for both GitHub and mapped GitLab data
 
 			if (isAnyFilterActive) {
 				if (isMR && !onlyPRs && !onlyMergedPRs) {
@@ -1516,14 +1520,21 @@ ${userReason}`;
 			if (isMR) {
 				// Platform-specific label
 				let prAction = '';
-				
+
+				// Filter only merged Pull Requests
 				let merged = null;
-				if ((githubToken || (useMergedStatus && !fallbackToSimple)) && mergedStatusResults) {
-					const repoParts = repository_url.split('/');
-					const owner = repoParts[repoParts.length - 2];
-					const repo = repoParts[repoParts.length - 1];
-					merged = mergedStatusResults[`${owner}/${repo}#${number}`];
-				}
+				if (platform === 'gitlab') {
+                    merged = (item.state === 'merged');
+                } else if (platform === 'github') {
+                    if ((githubToken || (useMergedStatus && !fallbackToSimple)) && mergedStatusResults) {
+                        const repoParts = repository_url?.split('/') || [];
+                        if (repoParts.length >= 2) {
+                            const owner = repoParts[repoParts.length - 2];
+                            const repo = repoParts[repoParts.length - 1];
+                            merged = mergedStatusResults[`${owner}/${repo}#${number}`];
+                        }
+                    }
+                }
 				if (onlyMergedPRs && merged !== true) {
 					console.log(`[SCRUM-DEBUG] Skipping PR #${number} because onlyMergedPRs is active and PR is not merged.`);
 					continue;

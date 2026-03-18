@@ -50,9 +50,15 @@ class GitLabHelper {
 	}
 
 	async fetchGitLabData(username, startDate, endDate, token = null) {
+		const storageItems = await new Promise(resolve => {
+            chrome.storage.local.get(['onlyMergedPRs'], resolve);
+        });
+        const onlyMergedPRs = storageItems.onlyMergedPRs === true;
+		
 		// Include token state in cache key to invalidate when auth changes
 		const tokenMarker = token ? 'auth' : 'noauth';
-		const cacheKey = `${username}-${startDate}-${endDate}-${tokenMarker}`;
+        const filterMarker = onlyMergedPRs ? 'mergedOnly' : 'all';
+		const cacheKey = `${username}-${startDate}-${endDate}-${tokenMarker}-${filterMarker}`;
 
 		if (this.cache.fetching || (this.cache.cacheKey === cacheKey && this.cache.data)) {
 			return this.cache.data;
@@ -140,7 +146,8 @@ class GitLabHelper {
 			let allMergeRequests = [];
 			for (const project of allProjects) {
 				try {
-					const projectMRsUrl = `${this.baseUrl}/projects/${project.id}/merge_requests?author_id=${userId}&created_after=${startDate}T00:00:00Z&created_before=${endDate}T23:59:59Z&per_page=100&order_by=updated_at&sort=desc`;
+					const stateFilter = onlyMergedPRs ? '&state=merged' : '';
+                    const projectMRsUrl = `${this.baseUrl}/projects/${project.id}/merge_requests?author_id=${userId}&created_after=${startDate}T00:00:00Z&created_before=${endDate}T23:59:59Z&per_page=100&order_by=updated_at&sort=desc${stateFilter}`;
 					const projectMRsRes = await fetch(projectMRsUrl, { headers });
 					if (projectMRsRes.ok) {
 						const projectMRs = await projectMRsRes.json();
