@@ -192,6 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			'onlyIssues',
 			'onlyPRs',
 			'onlyRevPRs',
+			'onlyMergedPRs',
 			'scrumReport',
 			'githubUsername',
 			'githubToken',
@@ -395,6 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		const onlyIssuesCheckbox = document.getElementById('onlyIssues');
 		const onlyPRsCheckbox = document.getElementById('onlyPRs');
 		const onlyRevPRsCheckbox = document.getElementById('onlyRevPRs');
+		const onlyMergedPRsCheckbox = document.getElementById('onlyMergedPRs')
 
 		const githubTokenInput = document.getElementById('githubToken');
 		const cacheInput = document.getElementById('cacheInput');
@@ -416,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
 				'onlyIssues',
 				'onlyPRs',
 				'onlyRevPRs',
+				'onlyMergedPRs',
 				'enableToggle',
 				'yesterdayContribution',
 				'startingDate',
@@ -444,6 +447,9 @@ document.addEventListener('DOMContentLoaded', () => {
 				if (typeof result.onlyRevPRs !== 'undefined') {
 					onlyRevPRsCheckbox.checked = result.onlyRevPRs;
 				}
+				if (typeof result.onlyMergedPRs !== 'undefined' && onlyMergedPRsCheckbox) {
+                    onlyMergedPRsCheckbox.checked = result.onlyMergedPRs;
+                }
 
 				// Reconcile mutually exclusive "Only Issues" and "Only PRs" flags on initialization.
 				// If both are somehow true in storage (e.g., from an older version or manual edits),
@@ -627,10 +633,16 @@ document.addEventListener('DOMContentLoaded', () => {
 			onlyIssuesCheckbox.addEventListener('change', () => {
 				const checked = onlyIssuesCheckbox.checked;
 				chrome.storage.local.set({ onlyIssues: checked }, () => {
-					if (checked && onlyPRsCheckbox.checked) {
-						// Uncheck the previously selected "Only PRs"
-						onlyPRsCheckbox.checked = false;
-						chrome.storage.local.set({ onlyPRs: false });
+					// Uncheck the previously selected "Only PRs" or "Only Merged PRs"
+					if (checked) {
+						if (onlyPRsCheckbox.checked) {
+							onlyPRsCheckbox.checked = false;
+							chrome.storage.local.set({ onlyPRs: false });
+						}
+						if (onlyMergedPRsCheckbox && onlyMergedPRsCheckbox.checked) {
+							onlyMergedPRsCheckbox.checked = false;
+							chrome.storage.local.set({ onlyMergedPRs: false });
+						}
 					}
 				});
 			});
@@ -646,11 +658,29 @@ document.addEventListener('DOMContentLoaded', () => {
 				});
 			});
 
+			if (onlyMergedPRsCheckbox) {
+				onlyMergedPRsCheckbox.addEventListener('change', () => {
+					const checked = onlyMergedPRsCheckbox.checked;
+					chrome.storage.local.set({ onlyMergedPRs: checked }, () => {
+						if (checked && onlyIssuesCheckbox.checked) {
+							// Uncheck the previously selected "Only Issues"
+							onlyIssuesCheckbox.checked = false;
+							chrome.storage.local.set({ onlyIssues: false });
+						}
+					});
+				});
+			}
+
 			if (onlyRevPRsCheckbox) {
 				onlyRevPRsCheckbox.addEventListener('change', () => {
 					chrome.storage.local.set({ onlyRevPRs: onlyRevPRsCheckbox.checked });
 				});
 			}
+			if (onlyMergedPRsCheckbox) {
+            onlyMergedPRsCheckbox.addEventListener('change', () => {
+                chrome.storage.local.set({ onlyMergedPRs: onlyMergedPRsCheckbox.checked });
+            });
+        }
 		}
 		showCommitsCheckbox.addEventListener('change', () => {
 			chrome.storage.local.set({ showCommits: showCommitsCheckbox.checked });

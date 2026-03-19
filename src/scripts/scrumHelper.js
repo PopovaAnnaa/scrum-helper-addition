@@ -58,6 +58,7 @@ function allIncluded(outputTarget = 'email') {
 	let onlyIssues = false;
 	let onlyPRs = false;
 	let onlyRevPRs = false;
+	let onlyMergedPRs = false;
 
 	const pr_open_button =
 		'<div style="vertical-align:middle;display: inline-block;padding: 0px 4px;font-size:9px;font-weight: 600;color: #fff;text-align: center;background-color: #2cbe4e;border-radius: 3px;line-height: 12px;margin-bottom: 2px;"  class="State State--green">open</div>';
@@ -102,6 +103,7 @@ function allIncluded(outputTarget = 'email') {
 				'onlyIssues',
 				'onlyPRs',
 				'onlyRevPRs',
+				'onlyMergedPRs'
 			],
 			(items) => {
 				console.log('[DEBUG] Storage items received:', items);
@@ -149,11 +151,16 @@ function allIncluded(outputTarget = 'email') {
 				onlyIssues = items.onlyIssues === true;
 				onlyPRs = items.onlyPRs === true;
 				onlyRevPRs = items.onlyRevPRs === true;
-				console.log('[SCRUM-DEBUG] loaded flags:', { onlyIssues, onlyPRs, onlyRevPRs });
+				onlyMergedPRs = items.onlyMergedPRs === true;
+				console.log('[SCRUM-DEBUG] loaded flags:', { onlyIssues, onlyPRs, onlyRevPRs, onlyMergedPRs });
 				// Enforce mutual exclusivity between onlyIssues and onlyPRs to avoid filtering out everything
 				if (onlyIssues && onlyPRs) {
 					console.warn('[SCRUM-HELPER]: Detected both onlyIssues and onlyPRs enabled; normalizing to onlyIssues.');
 					onlyPRs = false;
+				}
+				if (onlyIssues && onlyMergedPRs) {
+					console.warn('[SCRUM-HELPER]: Detected both onlyIssues and onlyMergedPRs enabled; normalizing to onlyIssues.');
+					onlyMergedPRs = false;
 				}
 				showCommits = items.showCommits || false;
 				showOpenLabel = items.showOpenLabel !== false; // Default to true if not explicitly set to false
@@ -638,19 +645,50 @@ function allIncluded(outputTarget = 'email') {
 				throw new Error(errorMsg);
 			}
 
-			const [issuesRes, prRes, userRes] = await Promise.all([
-				fetch(issueUrl, { headers }),
-				fetch(prUrl, { headers }),
-				userCheckRes, // Reuse the already validated user response
-			]);
+			async function fetchAllGithubPages(baseUrl, headers) {
+				let allItems = [];
+				let page = 1;
+				let hasNextPage = true;
 
-			if (issuesRes.status === 401 || prRes.status === 401 || issuesRes.status === 403 || prRes.status === 403) {
+				while (hasNextPage) {
+					const url = `${baseUrl}&page=${page}`;
+					const response = await fetch(url, { headers });
+
+					if (!response.ok) {
+						console.error('[SCRUM-HELPER] Error fetching GitHub data:', response.status);
+						break;
+					}
+
+					const data = await response.json();
+					
+					if (data && data.items && data.items.length > 0) {
+						allItems = allItems.concat(data.items);
+					
+						const linkHeader = response.headers.get('Link');
+						if (linkHeader && linkHeader.includes('rel="next"')) {
+							page++;
+						} else {
+							hasNextPage = false;
+						}
+					} else {
+						hasNextPage = false;
+					}
+				}
+				return { items: allItems };
+			}
+
+			githubIssuesData = await fetchAllGithubPages(issueUrl, headers);
+
+			const prRes = await fetch(prUrl, { headers });
+        	const userRes = userCheckRes;
+
+			if (prRes.status === 401 || prRes.status === 403) {
 				showInvalidTokenMessage();
 				githubCache.fetching = false;
 				return;
 			}
 
-			if (issuesRes.status === 422 || prRes.status === 422) {
+			if (prRes.status === 422) {
 				const errorMsg = `Invalid search query or date range. Please verify your date range format and try again.`;
 				logError(errorMsg);
 				if (outputTarget === 'popup') {
@@ -659,14 +697,6 @@ function allIncluded(outputTarget = 'email') {
 				throw new Error(errorMsg);
 			}
 
-			if (!issuesRes.ok) {
-				const errorMsg = `Error fetching GitHub issues: ${issuesRes.status} ${issuesRes.statusText}`;
-				logError(errorMsg);
-				if (outputTarget === 'popup') {
-					Materialize.toast && Materialize.toast(errorMsg, 4000);
-				}
-				throw new Error(errorMsg);
-			}
 			if (!prRes.ok) {
 				const errorMsg = `Error fetching GitHub PR review data: ${prRes.status} ${prRes.statusText}`;
 				logError(errorMsg);
@@ -681,7 +711,6 @@ function allIncluded(outputTarget = 'email') {
 				throw new Error(errorMsg);
 			}
 
-			githubIssuesData = await issuesRes.json();
 			githubPrsReviewData = await prRes.json();
 			githubUserData = await userRes.json();
 
@@ -990,10 +1019,15 @@ function allIncluded(outputTarget = 'email') {
 		log('[DEBUG] Both data processing functions completed, generating scrum body');
 		if (subjectForEmail) {
 			// Synchronized subject and body injection for email
-			let lastWeekUl = '<ul>';
-			for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
-			for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
-			lastWeekUl += '</ul>';
+			let lastWeekUl = '';
+            if (lastWeekArray.length === 0 && reviewedPrsArray.length === 0) {
+                lastWeekUl = '<div style="padding: 10px 0 10px 20px; color: #666; font-style: italic;">📭 No activity found for this period.</div>';
+            } else {
+                lastWeekUl = '<ul>';
+                for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
+                for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
+                lastWeekUl += '</ul>';
+            }
 			let nextWeekUl = '<ul>';
 			for (let i = 0; i < nextWeekArray.length; i++) nextWeekUl += nextWeekArray[i];
 			nextWeekUl += '</ul>';
@@ -1037,10 +1071,15 @@ function allIncluded(outputTarget = 'email') {
 			return;
 		}
 
-		let lastWeekUl = '<ul>';
-		for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
-		for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
-		lastWeekUl += '</ul>';
+		let lastWeekUl = '';
+        if (lastWeekArray.length === 0 && reviewedPrsArray.length === 0) {
+                lastWeekUl = '<p style="color: #666; font-style: italic;">No activity found for this period.</p>';
+        } else {
+            lastWeekUl = '<ul>';
+            for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
+            for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
+            lastWeekUl += '</ul>';
+        }
 
 		let nextWeekUl = '<ul>';
 		for (let i = 0; i < nextWeekArray.length; i++) nextWeekUl += nextWeekArray[i];
@@ -1395,7 +1434,7 @@ ${userReason}`;
 	}
 
 	async function writeGithubIssuesPrs(items) {
-		const isAnyFilterActive = onlyIssues || onlyPRs || onlyRevPRs;
+		const isAnyFilterActive = onlyIssues || onlyPRs || onlyRevPRs || onlyMergedPRs;
 		if (!items) {
 			return;
 		}
@@ -1478,10 +1517,10 @@ ${userReason}`;
 			const item = items[i];
 			log('[SCRUM-DEBUG] Processing item:', item);
 			// For GitLab, treat all items in the MRs array as MRs
-			const isMR = !!item.pull_request; // works for both GitHub and mapped GitLab data
+			const isMR = (platform === 'gitlab') ? (!!item.iid && !!item.project_id && !item.issue_type) : !!item.pull_request; // works for both GitHub and mapped GitLab data
 
 			if (isAnyFilterActive) {
-				if (isMR && !onlyPRs) {
+				if (isMR && !onlyPRs && !onlyMergedPRs) {
 					log('[SCRUM-DEBUG] Filters active, skipping PR because onlyPRs is not checked:', item.number);
 					continue;
 				}
@@ -1514,6 +1553,25 @@ ${userReason}`;
 				// Platform-specific label
 				let prAction = '';
 
+				// Filter only merged Pull Requests
+				let merged = null;
+				if (platform === 'gitlab') {
+                    merged = (item.state === 'merged');
+                } else if (platform === 'github') {
+                    if ((githubToken || (useMergedStatus && !fallbackToSimple)) && mergedStatusResults) {
+                        const repoParts = repository_url?.split('/') || [];
+                        if (repoParts.length >= 2) {
+                            const owner = repoParts[repoParts.length - 2];
+                            const repo = repoParts[repoParts.length - 1];
+                            merged = mergedStatusResults[`${owner}/${repo}#${number}`];
+                        }
+                    }
+                }
+				if (onlyMergedPRs && merged !== true) {
+					console.log(`[SCRUM-DEBUG] Skipping PR #${number} because onlyMergedPRs is active and PR is not merged.`);
+					continue;
+				}
+				
 				const prCreatedDate = new Date(item.created_at);
 
 				// Get the correct date range for filtering
@@ -1603,13 +1661,6 @@ ${userReason}`;
 				} else if (platform === 'gitlab' && item.state === 'closed') {
 					li = `<li><i>(${project})</i> - ${prAction} <a href='${html_url}' target='_blank' rel='noopener noreferrer' contenteditable='false'>(#${number})</a> - <a href='${html_url}' target='_blank' rel='noopener noreferrer' contenteditable='false'>${title}</a>${showOpenLabel ? ' ' + pr_closed_button : ''}</li>`;
 				} else {
-					let merged = null;
-					if ((githubToken || (useMergedStatus && !fallbackToSimple)) && mergedStatusResults) {
-						const repoParts = repository_url.split('/');
-						const owner = repoParts[repoParts.length - 2];
-						const repo = repoParts[repoParts.length - 1];
-						merged = mergedStatusResults[`${owner}/${repo}#${number}`];
-					}
 					if (merged === true) {
 						li = `<li><i>(${project})</i> - ${prAction} <a href='${html_url}' target='_blank' rel='noopener noreferrer' contenteditable='false'>(#${number})</a> - <a href='${html_url}' target='_blank' rel='noopener noreferrer' contenteditable='false'>${title}</a>${showOpenLabel ? ' ' + pr_merged_button : ''}</li>`;
 					} else {
