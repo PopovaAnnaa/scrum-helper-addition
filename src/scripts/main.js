@@ -229,46 +229,48 @@ function handleAiToneChange() {
     chrome.storage.local.set({ aiTone: aiToneElement.value });
 }
 
-function handleAiApiKeyChange() {
-    const encryptedKey = encryptApiKey(aiApiKeyElement.value.trim());
-    chrome.storage.local.set({ aiApiKey: encryptedKey });
+function handleAiApiKeyChange(event) {
+    const rawKey = event.target.value.trim();
+    if (rawKey) {
+        const encryptedKey = window.encryptApiKey(rawKey);
+        chrome.storage.local.set({ aiApiKey: encryptedKey });
+    } else {
+        chrome.storage.local.remove('aiApiKey');
+    }
 }
 
 async function validateAiSettings() {
     if (!aiSummaryElement.checked) return true;
 
-    const apiKey = aiApiKeyElement.value.trim();
-    const scrumReportElement = document.getElementById('scrumReport');
+    const storage = await chrome.storage.local.get(['aiApiKey']);
+    const encryptedKey = storage.aiApiKey;
     
-    if (!apiKey) {
+    if (!encryptedKey) {
         alert("To use AI Summary, you must specify the AI API Key in the settings.");
         return false;
     }
 
-    if (!apiKey.startsWith("sk-")) {
-        const confirmProceed = confirm("Your API key should normally start with ‘sk-’. Are you sure you want to continue?");
-        if (!confirmProceed) return false;
-    }
-
     const originalBtnText = generateReportButton.innerHTML;
-    generateReportButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Перевірка ключа...';
-    generateReportButton.disabled = true;
+    const scrumReportElement = document.getElementById('scrumReport');
 
-    const verification = await verifyApiKeyWithProvider(apiKey);
+    try {
+        generateReportButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Checking key...';
+        generateReportButton.disabled = true;
 
-    generateReportButton.innerHTML = originalBtnText;
-    generateReportButton.disabled = false;
-
-    if (!verification.isValid) {
+        await verifyApiKeyWithProvider(encryptedKey);
+        
+        return true; 
+    } catch (error) {
         if (scrumReportElement) {
-            scrumReportElement.innerHTML = `<div class="text-red-600 font-medium p-2 bg-red-50 rounded-lg border border-red-200"><i class="fa fa-exclamation-triangle"></i> Error: ${verification.error}</div>`;
+            scrumReportElement.innerHTML = `<div class="text-red-600 font-medium p-2 bg-red-50 rounded-lg border border-red-200">Error: ${error.message}</div>`;
         } else {
-            alert(verification.error);
+            alert(error.message);
         }
         return false;
+    } finally {
+        generateReportButton.innerHTML = originalBtnText;
+        generateReportButton.disabled = false;
     }
-
-    return true; 
 }
 
 if (generateReportButton) {

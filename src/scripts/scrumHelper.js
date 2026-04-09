@@ -23,8 +23,51 @@ let platformUsername = '';
 let gitlabToken = '';
 let gitlabHelper = null;
 
-function allIncluded(outputTarget = 'email') {
-	// Always re-instantiate gitlabHelper for gitlab platform to ensure fresh cache after refresh
+
+async function enhanceReportWithAI(rawReportText) {
+    console.log("[DEBUG] Inside enhanceReportWithAI...");
+
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['aiSummary', 'aiTone', 'aiApiKey'], async (result) => {
+            if (!result.aiSummary || !result.aiApiKey) {
+                resolve(rawReportText);
+                return;
+            }
+
+            try {
+                const aiClient = new window.GeminiClient(result.aiApiKey);
+                const tone = result.aiTone || 'professional';
+                
+                const systemPrompt = `You are a Senior Project Manager. Your goal is to transform raw activity data into a polished, professional Daily Scrum Report.
+                
+                STRICT RULES:
+                1. TONE: Use a ${tone} tone.
+                2. LANGUAGE: Respond in the SAME language as the input text (Russian or English).
+                3. FORMAT: Use clear Markdown with bold headers. Use bullet points for tasks.
+                4. STRUCTURE:
+                   - **Yesterday's Progress** (or "What I did yesterday")
+                   - **Today's Focus** (or "Plans for today")
+                   - **Blockers** (if any)
+                5. ACCURACY: Do not add any new tasks, repositories, or technologies not mentioned in the input. If the input says "No activity", present it gracefully.
+                6. CONCISENESS: Be brief but informative. Remove technical noise (like commit hashes or branch names) unless they are critical for context.`;
+                
+                console.log("Requesting AI enhancement...");
+                
+                const userPrompt = `Raw Scrum data to process:\n\n${rawReportText}`;
+                
+                const enhancedReport = await aiClient.generateText(userPrompt, systemPrompt);
+                
+                console.log("AI summary successfully generated.");
+                resolve(enhancedReport);
+            } catch (error) {
+                console.error("AI Generation Error:", error);
+                resolve(`[AI Error: ${error.message}]\n\n${rawReportText}`);
+            }
+        });
+    });
+}
+
+async function allIncluded(outputTarget = 'email') {
 	if (platform === 'gitlab' || (typeof platform === 'undefined' && window.GitLabHelper)) {
 		gitlabHelper = new window.GitLabHelper();
 	}
@@ -32,6 +75,7 @@ function allIncluded(outputTarget = 'email') {
 		return;
 	}
 	scrumGenerationInProgress = true;
+
 	console.log('allIncluded called with outputTarget:', outputTarget);
 
 	let scrumBody = null;
@@ -1016,46 +1060,75 @@ function allIncluded(outputTarget = 'email') {
 			await writeGithubIssuesPrs(githubPrsReviewData?.items || []);
 		}
 		await writeGithubPrsReviews();
-		log('[DEBUG] Both data processing functions completed, generating scrum body');
-		if (subjectForEmail) {
-			// Synchronized subject and body injection for email
-			let lastWeekUl = '';
-            if (lastWeekArray.length === 0 && reviewedPrsArray.length === 0) {
-                lastWeekUl = '<div style="padding: 10px 0 10px 20px; color: #666; font-style: italic;">📭 No activity found for this period.</div>';
-            } else {
-                lastWeekUl = '<ul>';
-                for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
-                for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
-                lastWeekUl += '</ul>';
+        log('[DEBUG] Both data processing functions completed, generating scrum body');
+
+        let lastWeekUl = '';
+        if (lastWeekArray.length === 0 && reviewedPrsArray.length === 0) {
+            lastWeekUl = '<div style="padding: 10px 0 10px 20px; color: #666; font-style: italic;">📭 No activity found for this period.</div>';
+        } else {
+            lastWeekUl = '<ul>';
+            for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
+            for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
+            lastWeekUl += '</ul>';
+        }
+
+        let nextWeekUl = '<ul>';
+        for (let i = 0; i < nextWeekArray.length; i++) nextWeekUl += nextWeekArray[i];
+        nextWeekUl += '</ul>';
+
+        const weekOrDay = yesterdayContribution ? 'yesterday' : 'the period';
+        const weekOrDay2 = 'today';
+        
+        let content;
+        if (yesterdayContribution) {
+            content = `<b>1. What did I do ${weekOrDay}?</b><br>${lastWeekUl}<br><b>2. What do I plan to do ${weekOrDay2}?</b><br>${nextWeekUl}<br><b>3. What is blocking me from making progress?</b><br>${userReason}`;
+        } else {
+            content = `<b>1. What did I do from ${formatDate(startingDate)} to ${formatDate(endingDate)}?</b><br>${lastWeekUl}<br><b>2. What do I plan to do ${weekOrDay2}?</b><br>${nextWeekUl}<br><b>3. What is blocking me from making progress?</b><br>${userReason}`;
+        }
+
+        const storage = await chrome.storage.local.get(['aiSummary']);
+        if (storage.aiSummary) {
+            if (outputTarget === 'popup') {
+                const reportElement = document.getElementById('scrumReport');
+                if (reportElement) reportElement.innerHTML = "<i>✨ Gemini is polishing your report...</i>";
             }
-			let nextWeekUl = '<ul>';
-			for (let i = 0; i < nextWeekArray.length; i++) nextWeekUl += nextWeekArray[i];
-			nextWeekUl += '</ul>';
-			const weekOrDay = yesterdayContribution ? 'yesterday' : 'the period';
-			const weekOrDay2 = 'today';
-			let content;
-			if (yesterdayContribution) {
-				content = `<b>1. What did I do ${weekOrDay}?</b><br>${lastWeekUl}<br><b>2. What do I plan to do ${weekOrDay2}?</b><br>${nextWeekUl}<br><b>3. What is blocking me from making progress?</b><br>${userReason}`;
-			} else {
-				content = `<b>1. What did I do from ${formatDate(startingDate)} to ${formatDate(endingDate)}?</b><br>${lastWeekUl}<br><b>2. What do I plan to do ${weekOrDay2}?</b><br>${nextWeekUl}<br><b>3. What is blocking me from making progress?</b><br>${userReason}`;
-			}
-			// Wait for both subject and body to be available, then inject both
-			let injected = false;
-			const interval = setInterval(() => {
-				const elements = window.emailClientAdapter?.getEditorElements();
-				if (elements && elements.subject && elements.body && !injected) {
-					elements.subject.value = subjectForEmail;
-					elements.subject.dispatchEvent(new Event('input', { bubbles: true }));
-					window.emailClientAdapter.injectContent(elements.body, content, elements.eventTypes.contentChange);
-					injected = true;
-					clearInterval(interval);
-				}
-			}, 200);
-			setTimeout(() => {
-				if (!injected) clearInterval(interval);
-			}, 30000);
-		} else {
-			writeScrumBody();
+            
+            console.log("Requesting AI enhancement...");
+            try {
+                content = await enhanceReportWithAI(content); 
+                console.log("AI Enhancement complete!");
+            } catch (aiError) {
+                console.error("AI failed, falling back to raw report:", aiError);
+            }
+        }
+
+        if (outputTarget === 'popup') {
+            const scrumReport = document.getElementById('scrumReport');
+            if (scrumReport) {
+                scrumReport.innerHTML = content;
+            }
+            
+            const generateBtn = document.getElementById('generateReport');
+            if (generateBtn) {
+                generateBtn.innerHTML = '<i class="fa fa-refresh"></i> Generate Report';
+                generateBtn.disabled = false;
+            }
+            scrumGenerationInProgress = false;
+        }
+
+        if (subjectForEmail) {
+            let injected = false;
+            const interval = setInterval(() => {
+                const elements = window.emailClientAdapter?.getEditorElements();
+                if (elements && elements.subject && elements.body && !injected) {
+                    elements.subject.value = subjectForEmail;
+                    elements.subject.dispatchEvent(new Event('input', { bubbles: true }));
+                    window.emailClientAdapter.injectContent(elements.body, content, elements.eventTypes.contentChange);
+                    injected = true;
+                    clearInterval(interval);
+                }
+            }, 200);
+            setTimeout(() => { if (!injected) clearInterval(interval); }, 30000);
 		}
 	}
 
@@ -1091,19 +1164,19 @@ function allIncluded(outputTarget = 'email') {
 		let content;
 		if (yesterdayContribution) {
 			content = `<b>1. What did I do ${weekOrDay}?</b><br>
-${lastWeekUl}<br>
-<b>2. What do I plan to do ${weekOrDay2}?</b><br>
-${nextWeekUl}<br>
-<b>3. What is blocking me from making progress?</b><br>
-${userReason}`;
-		} else {
-			content = `<b>1. What did I do from ${formatDate(startingDate)} to ${formatDate(endingDate)}?</b><br>
-${lastWeekUl}<br>
-<b>2. What do I plan to do ${weekOrDay2}?</b><br>
-${nextWeekUl}<br>
-<b>3. What is blocking me from making progress?</b><br>
-${userReason}`;
-		}
+			${lastWeekUl}<br>
+			<b>2. What do I plan to do ${weekOrDay2}?</b><br>
+			${nextWeekUl}<br>
+			<b>3. What is blocking me from making progress?</b><br>
+			${userReason}`;
+					} else {
+						content = `<b>1. What did I do from ${formatDate(startingDate)} to ${formatDate(endingDate)}?</b><br>
+			${lastWeekUl}<br>
+			<b>2. What do I plan to do ${weekOrDay2}?</b><br>
+			${nextWeekUl}<br>
+			<b>3. What is blocking me from making progress?</b><br>
+			${userReason}`;
+					}
 
 		if (outputTarget === 'popup') {
 			const scrumReport = document.getElementById('scrumReport');
@@ -1862,8 +1935,9 @@ if (window.location.protocol.startsWith('http')) {
 		});
 }
 
-window.generateScrumReport = () => {
-	allIncluded('popup');
+window.generateScrumReport = async function() { 
+    console.log("Generating report...");
+    await allIncluded('popup'); 
 };
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
