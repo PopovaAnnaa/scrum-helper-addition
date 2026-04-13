@@ -23,7 +23,6 @@ let platformUsername = '';
 let gitlabToken = '';
 let gitlabHelper = null;
 
-
 async function enhanceReportWithAI(rawReportText) {
     console.log("[DEBUG] Inside enhanceReportWithAI...");
 
@@ -36,24 +35,51 @@ async function enhanceReportWithAI(rawReportText) {
 
             try {
                 const aiClient = new window.GeminiClient(result.aiApiKey);
-                const tone = result.aiTone || 'professional';
+                const tone = result.aiTone ? result.aiTone.toLowerCase() : 'casual';
                 
-                const systemPrompt = `You are a Senior Project Manager. Your goal is to transform raw activity data into a polished, professional Daily Scrum Report.
+
+				const safeReportData = cleanAndTrimRawData(rawReportText);
+
+                let personaPrompt = "";
+                let tonePrompt = "";
+
+                switch (tone) {
+                    case 'official':
+                    case 'professional':
+                        personaPrompt = "You are an engineering professional providing a formal, structured status report to stakeholders and management.";
+                        tonePrompt = "Use a highly formal, objective, and corporate tone. Speak in the first person ('I'), but avoid slang, emotional language, or casual filler words. Focus on business value and precise technical delivery.";
+                        break;
+                    case 'concise':
+                        personaPrompt = "You are a highly efficient developer providing a rapid, no-nonsense daily update.";
+                        tonePrompt = "Be ruthlessly brief and direct. Strip out all filler words, pleasantries, and conversational fluff. Use the absolute minimum number of words necessary to convey the facts. Speak in the first person ('I').";
+                        break;
+                    case 'casual':
+                    default:
+                        personaPrompt = "You are a friendly, collaborative team member giving your daily standup update.";
+                        tonePrompt = "Use a relaxed, natural, and conversational tone. Speak as if you are giving a quick update to your close team on Slack. Use friendly phrasing and speak in the first person ('I').";
+                        break;
+                }
+
+                const systemPrompt = `${personaPrompt} Your goal is to transform raw activity data (like PR titles, branch names, comments, and repo names) into a daily report.
                 
                 STRICT RULES:
-                1. TONE: Use a ${tone} tone.
-                2. LANGUAGE: Respond in the SAME language as the input text (Russian or English).
-                3. FORMAT: Use clear Markdown with bold headers. Use bullet points for tasks.
+                1. TONE: ${tonePrompt}
+                2. GROUPING & TRANSLATION: Analyze the provided data and translate technical shorthand into clear sentences. **CRITICAL: You MUST group all activities by repository/project. Combine multiple tasks for the same project into a single, flowing summary per project. Prefix this summary with the project name in brackets (e.g., "[frontend-app] I resolved spacing issues, updated the main configuration, and reviewed 2 PRs"). Do NOT create multiple bullet points for the same project.**
+                3. FORMAT: DO NOT use Markdown. Use PLAIN TEXT ONLY. Use ALL CAPS for headers and a simple dash (-) for list items.
                 4. STRUCTURE:
-                   - **Yesterday's Progress** (or "What I did yesterday")
-                   - **Today's Focus** (or "Plans for today")
-                   - **Blockers** (if any)
-                5. ACCURACY: Do not add any new tasks, repositories, or technologies not mentioned in the input. If the input says "No activity", present it gracefully.
-                6. CONCISENESS: Be brief but informative. Remove technical noise (like commit hashes or branch names) unless they are critical for context.`;
+                YESTERDAY:
+                - [Project Name A] (Combined summary of all work done for this project)
+                - [Project Name B] (Combined summary of all work done for this project)
+                TODAY:
+                - [Project Name] (Detail what you are tackling next)
+                BLOCKERS:
+                - [Project Name] (Mention any issues) OR say "No blockers / None"
+                5. ACCURACY: Do not add any new tasks, repositories, or technologies not mentioned in the input. If the input says "No activity", present it appropriately for the tone.
+                6. CONCISENESS: Remove raw technical noise (like PR numbers, hash codes, or raw branch names) unless absolutely necessary.`;
                 
-                console.log("Requesting AI enhancement...");
+                console.log(`Requesting AI enhancement with tone: ${tone}...`);
                 
-                const userPrompt = `Raw Scrum data to process:\n\n${rawReportText}`;
+                const userPrompt = `Raw Scrum data to process:\n\n${safeReportData}`;
                 
                 const enhancedReport = await aiClient.generateText(userPrompt, systemPrompt);
                 
@@ -1090,7 +1116,7 @@ async function allIncluded(outputTarget = 'email') {
         if (storage.aiSummary) {
             if (outputTarget === 'popup') {
                 const reportElement = document.getElementById('scrumReport');
-                if (reportElement) reportElement.innerHTML = "<i>✨ Gemini is polishing your report...</i>";
+                if (reportElement) reportElement.innerHTML = "<i>AI is polishing your report...</i>";
             }
             
             console.log("Requesting AI enhancement...");
@@ -1169,8 +1195,8 @@ async function allIncluded(outputTarget = 'email') {
 			${nextWeekUl}<br>
 			<b>3. What is blocking me from making progress?</b><br>
 			${userReason}`;
-					} else {
-						content = `<b>1. What did I do from ${formatDate(startingDate)} to ${formatDate(endingDate)}?</b><br>
+		} else {
+			content = `<b>1. What did I do from ${formatDate(startingDate)} to ${formatDate(endingDate)}?</b><br>
 			${lastWeekUl}<br>
 			<b>2. What do I plan to do ${weekOrDay2}?</b><br>
 			${nextWeekUl}<br>
