@@ -51,13 +51,14 @@ class GitLabHelper {
 
 	async fetchGitLabData(username, startDate, endDate, token = null) {
 		const storageItems = await new Promise(resolve => {
-            chrome.storage.local.get(['onlyMergedPRs'], resolve);
+            chrome.storage.local.get(['onlyMergedPRs', 'onlyClosedIssues'], resolve);
         });
         const onlyMergedPRs = storageItems.onlyMergedPRs === true;
-		
+        const onlyClosedIssues = storageItems.onlyClosedIssues === true;
+
 		// Include token state in cache key to invalidate when auth changes
 		const tokenMarker = token ? 'auth' : 'noauth';
-        const filterMarker = onlyMergedPRs ? 'mergedOnly' : 'all';
+        const filterMarker = `${onlyMergedPRs ? 'mergedOnly' : 'all'}-${onlyClosedIssues ? 'closedIssues' : 'allIssues'}`;
 		const cacheKey = `${username}-${startDate}-${endDate}-${tokenMarker}-${filterMarker}`;
 
 		if (this.cache.fetching || (this.cache.cacheKey === cacheKey && this.cache.data)) {
@@ -174,10 +175,11 @@ class GitLabHelper {
             }
 
 			// Fetch issues from each project (works without auth for public projects)
+			const issueStateFilter = onlyClosedIssues ? '&state=closed' : '';
 			let allIssues = [];
 			for (const project of allProjects) {
 				try {
-					const projectIssuesUrl = `${this.baseUrl}/projects/${project.id}/issues?author_id=${userId}&created_after=${startDate}T00:00:00Z&created_before=${endDate}T23:59:59Z&per_page=100&order_by=updated_at&sort=desc`;
+					const projectIssuesUrl = `${this.baseUrl}/projects/${project.id}/issues?author_id=${userId}&created_after=${startDate}T00:00:00Z&created_before=${endDate}T23:59:59Z&per_page=100&order_by=updated_at&sort=desc${issueStateFilter}`;
 					const projectIssuesRes = await fetch(projectIssuesUrl, { headers });
 					if (projectIssuesRes.ok) {
 						const projectIssues = await projectIssuesRes.json();
