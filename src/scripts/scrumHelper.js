@@ -59,6 +59,7 @@ function allIncluded(outputTarget = 'email') {
 	let onlyPRs = false;
 	let onlyRevPRs = false;
 	let onlyMergedPRs = false;
+	let onlyClosedIssues = false;
 
 	const pr_open_button =
 		'<div style="vertical-align:middle;display: inline-block;padding: 0px 4px;font-size:9px;font-weight: 600;color: #fff;text-align: center;background-color: #2cbe4e;border-radius: 3px;line-height: 12px;margin-bottom: 2px;"  class="State State--green">open</div>';
@@ -103,7 +104,8 @@ function allIncluded(outputTarget = 'email') {
 				'onlyIssues',
 				'onlyPRs',
 				'onlyRevPRs',
-				'onlyMergedPRs'
+				'onlyMergedPRs',
+				'onlyClosedIssues'
 			],
 			(items) => {
 				console.log('[DEBUG] Storage items received:', items);
@@ -152,7 +154,8 @@ function allIncluded(outputTarget = 'email') {
 				onlyPRs = items.onlyPRs === true;
 				onlyRevPRs = items.onlyRevPRs === true;
 				onlyMergedPRs = items.onlyMergedPRs === true;
-				console.log('[SCRUM-DEBUG] loaded flags:', { onlyIssues, onlyPRs, onlyRevPRs, onlyMergedPRs });
+				onlyClosedIssues = items.onlyClosedIssues === true;
+				console.log('[SCRUM-DEBUG] loaded flags:', { onlyIssues, onlyPRs, onlyRevPRs, onlyMergedPRs, onlyClosedIssues });
 				// Enforce mutual exclusivity between onlyIssues and onlyPRs to avoid filtering out everything
 				if (onlyIssues && onlyPRs) {
 					console.warn('[SCRUM-HELPER]: Detected both onlyIssues and onlyPRs enabled; normalizing to onlyIssues.');
@@ -160,6 +163,14 @@ function allIncluded(outputTarget = 'email') {
 				}
 				if (onlyIssues && onlyMergedPRs) {
 					console.warn('[SCRUM-HELPER]: Detected both onlyIssues and onlyMergedPRs enabled; normalizing to onlyIssues.');
+					onlyMergedPRs = false;
+				}
+				if (onlyClosedIssues && onlyPRs) {
+					console.warn('[SCRUM-HELPER]: Detected both onlyClosedIssues and onlyPRs enabled; normalizing to onlyClosedIssues.');
+					onlyPRs = false;
+				}
+				if (onlyClosedIssues && onlyMergedPRs) {
+					console.warn('[SCRUM-HELPER]: Detected both onlyClosedIssues and onlyMergedPRs enabled; normalizing to onlyClosedIssues.');
 					onlyMergedPRs = false;
 				}
 				showCommits = items.showCommits || false;
@@ -1434,7 +1445,7 @@ ${userReason}`;
 	}
 
 	async function writeGithubIssuesPrs(items) {
-		const isAnyFilterActive = onlyIssues || onlyPRs || onlyRevPRs || onlyMergedPRs;
+		const isAnyFilterActive = onlyIssues || onlyPRs || onlyRevPRs || onlyMergedPRs || onlyClosedIssues;
 		if (!items) {
 			return;
 		}
@@ -1466,6 +1477,10 @@ ${userReason}`;
 		}
 
 		const daysRange = getDaysBetween(startDateForRange, endDateForRange);
+
+		// Build UTC date boundaries for filtering (shared by PR and issue filters)
+		const startDateFilter = new Date(startDateForRange + 'T00:00:00Z');
+		const endDateFilter = new Date(endDateForRange + 'T23:59:59Z');
 
 		if (githubToken) {
 			useMergedStatus = true;
@@ -1524,7 +1539,7 @@ ${userReason}`;
 					log('[SCRUM-DEBUG] Filters active, skipping PR because onlyPRs is not checked:', item.number);
 					continue;
 				}
-				if (!isMR && !onlyIssues) {
+				if (!isMR && !onlyIssues && !onlyClosedIssues) {
 					log('[SCRUM-DEBUG] Filters active, skipping Issue because onlyIssues is not checked:', item.number);
 					continue;
 				}
@@ -1573,25 +1588,6 @@ ${userReason}`;
 				}
 				
 				const prCreatedDate = new Date(item.created_at);
-
-				// Get the correct date range for filtering
-				let startDateFilter;
-				let endDateFilter;
-				if (yesterdayContribution) {
-					const today = new Date();
-					const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-					startDateFilter = new Date(yesterday.toISOString().split('T')[0] + 'T00:00:00Z');
-					endDateFilter = new Date(today.toISOString().split('T')[0] + 'T23:59:59Z'); // Use yesterday for start and today for end
-				} else if (startingDate && endingDate) {
-					startDateFilter = new Date(startingDate + 'T00:00:00Z');
-					endDateFilter = new Date(endingDate + 'T23:59:59Z');
-				} else {
-					// Default to last 7 days if no date range is set
-					const today = new Date();
-					const lastWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7);
-					startDateFilter = new Date(lastWeek.toISOString().split('T')[0] + 'T00:00:00Z');
-					endDateFilter = new Date(today.toISOString().split('T')[0] + 'T23:59:59Z');
-				}
 
 				const today = new Date();
 				today.setHours(0, 0, 0, 0);
@@ -1673,6 +1669,26 @@ ${userReason}`;
 				continue; // Prevent issue logic from overwriting PR li
 			} else {
 				// Only process as issue if not a PR
+
+				// Only closed issues within date range
+				if (onlyClosedIssues) {
+					if (item.state !== 'closed') {
+						log('[SCRUM-DEBUG] onlyClosedIssues active, skipping non-closed issue:', item.number);
+						continue;
+					}
+					if (item.closed_at) {
+						const closedDate = new Date(item.closed_at);
+						if (isNaN(closedDate.getTime())) {
+							console.warn('[SCRUM-HELPER] Issue #' + item.number + ' has unparseable closed_at:', item.closed_at);
+						} else if (closedDate < startDateFilter || closedDate > endDateFilter) {
+							log('[SCRUM-DEBUG] onlyClosedIssues active, issue closed outside date range:', item.number, item.closed_at);
+							continue;
+						}
+					} else {
+						console.warn('[SCRUM-HELPER] Issue #' + item.number + ' is closed but has no closed_at field');
+					}
+				}
+
 				if (item.state === 'open' && item.body?.toUpperCase().indexOf('YES') > 0) {
 					const li2 =
 						'<li><i>(' +
