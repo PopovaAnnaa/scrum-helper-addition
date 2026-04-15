@@ -280,10 +280,41 @@ if (generateReportButton) {
 
         console.log("Validation passed! Starting report generation...");
         
-        if (typeof window.generateScrumReport === 'function') {
-            window.generateScrumReport(); 
+        const reportElement = document.getElementById('scrumReport'); 
+        
+        let currentText = '';
+        if (reportElement) {
+            currentText = (reportElement.value !== undefined ? reportElement.value : reportElement.innerText) || '';
+            currentText = currentText.trim();
+        }
+
+        const isDraft = currentText.includes('COMPLETED WORK:') || currentText.includes('YESTERDAY:');
+
+        if (isDraft) {
+            console.log("Existing draft detected! Sending draft to AI for rewrite...");
+            
+            const updateReportText = (newText) => {
+                if (reportElement.value !== undefined) {
+                    reportElement.value = newText;
+                } else {
+                    reportElement.innerText = newText;
+                }
+            };
+
+            updateReportText("Rewriting your draft with AI...\n\n" + currentText);
+
+            const newReport = await window.enhanceReportWithAI(currentText);
+            
+            updateReportText(newReport);
+            
         } else {
-            console.error("The generateScrumReport function was not found.");
+            console.log("No draft found. Running full Scrum report generation...");
+            
+            if (typeof window.generateScrumReport === 'function') {
+                window.generateScrumReport(); 
+            } else {
+                console.error("The generateScrumReport function was not found.");
+            }
         }
     });
 }

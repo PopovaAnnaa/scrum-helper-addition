@@ -37,49 +37,52 @@ async function enhanceReportWithAI(rawReportText) {
                 const aiClient = new window.GeminiClient(result.aiApiKey);
                 const tone = result.aiTone ? result.aiTone.toLowerCase() : 'casual';
                 
+                const safeReportData = cleanAndTrimRawData(rawReportText);
 
-				const safeReportData = cleanAndTrimRawData(rawReportText);
+                const currentDate = new Date().toLocaleDateString('en-US', { 
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+                });
 
                 let personaPrompt = "";
                 let tonePrompt = "";
 
                 switch (tone) {
                     case 'official':
-                    case 'professional':
                         personaPrompt = "You are an engineering professional providing a formal, structured status report to stakeholders and management.";
-                        tonePrompt = "Use a highly formal, objective, and corporate tone. Speak in the first person ('I'), but avoid slang, emotional language, or casual filler words. Focus on business value and precise technical delivery.";
+                        tonePrompt = "Use a highly formal, objective, and corporate tone. Speak in the first person ('I'). Focus on business value. **CRITICAL: You MUST use specific calendar dates (e.g., 'On April 10th') when referring to completed work.**";
                         break;
                     case 'concise':
                         personaPrompt = "You are a highly efficient developer providing a rapid, no-nonsense daily update.";
-                        tonePrompt = "Be ruthlessly brief and direct. Strip out all filler words, pleasantries, and conversational fluff. Use the absolute minimum number of words necessary to convey the facts. Speak in the first person ('I').";
+                        tonePrompt = "Be ruthlessly brief and direct. Strip out all filler words. Use the absolute minimum number of words necessary. Speak in the first person ('I'). **Dates are optional; you may omit them entirely.**";
                         break;
                     case 'casual':
                     default:
                         personaPrompt = "You are a friendly, collaborative team member giving your daily standup update.";
-                        tonePrompt = "Use a relaxed, natural, and conversational tone. Speak as if you are giving a quick update to your close team on Slack. Use friendly phrasing and speak in the first person ('I').";
+                        tonePrompt = "Use a relaxed, natural, and conversational tone. Speak as if you are giving a quick update to your close team on Slack. **Translate absolute dates into relative, conversational timeframes based on today's date.**";
                         break;
                 }
 
-                const systemPrompt = `${personaPrompt} Your goal is to transform raw activity data (like PR titles, branch names, comments, and repo names) into a daily report.
+                const systemPrompt = `${personaPrompt} Your goal is to transform the provided input into a polished daily report. 
+                
+                CURRENT DATE CONTEXT: Today is ${currentDate}. You MUST compare the dates in the input against this current date to accurately determine timeframes.
                 
                 STRICT RULES:
-                1. TONE: ${tonePrompt}
-                2. GROUPING & TRANSLATION: Analyze the provided data and translate technical shorthand into clear sentences. **CRITICAL: You MUST group all activities by repository/project. Combine multiple tasks for the same project into a single, flowing summary per project. Prefix this summary with the project name in brackets (e.g., "[frontend-app] I resolved spacing issues, updated the main configuration, and reviewed 2 PRs"). Do NOT create multiple bullet points for the same project.**
-                3. FORMAT: DO NOT use Markdown. Use PLAIN TEXT ONLY. Use ALL CAPS for headers and a simple dash (-) for list items.
-                4. STRUCTURE:
-                YESTERDAY:
-                - [Project Name A] (Combined summary of all work done for this project)
-                - [Project Name B] (Combined summary of all work done for this project)
-                TODAY:
-                - [Project Name] (Detail what you are tackling next)
+                1. TONE & DATES: ${tonePrompt}
+                2. DRAFT PARSING (CRITICAL): The input text may already look like a report with headers like "TODAY / PLANNED:" or "BLOCKERS:". **You MUST read the text under these headers. Do not ignore what the user typed. Rewrite their notes into the requested tone.**
+                3. GROUPING & TRANSLATION: Translate technical shorthand into clear sentences. Group all activities by repository/project. Combine multiple tasks for the same project into a single, flowing summary per project. Prefix this summary with the project name in brackets (e.g., "[frontend-app] I resolved spacing issues...").
+                4. FORMAT: DO NOT use Markdown. Use PLAIN TEXT ONLY. Use ALL CAPS for headers and a simple dash (-) for list items.
+                5. STRUCTURE:
+                COMPLETED WORK:
+                - [Project Name A] (Combined summary of completed work)
+                TODAY / PLANNED:
+                - (Rewrite the user's notes from the draft here. Keep their project names if provided. If the user wrote absolutely nothing for today, say "No specific tasks planned yet.")
                 BLOCKERS:
-                - [Project Name] (Mention any issues) OR say "No blockers / None"
-                5. ACCURACY: Do not add any new tasks, repositories, or technologies not mentioned in the input. If the input says "No activity", present it appropriately for the tone.
-                6. CONCISENESS: Remove raw technical noise (like PR numbers, hash codes, or raw branch names) unless absolutely necessary.`;
+                - (Rewrite the user's blockers from the draft here. If none, say "No blockers / None")
+                6. ACCURACY: Do not add any new tasks or technologies not mentioned in the input. Remove raw technical noise unless absolutely necessary.`;
                 
                 console.log(`Requesting AI enhancement with tone: ${tone}...`);
                 
-                const userPrompt = `Raw Scrum data to process:\n\n${safeReportData}`;
+                const userPrompt = `Input Data/Draft to process:\n\n${safeReportData}`;
                 
                 const enhancedReport = await aiClient.generateText(userPrompt, systemPrompt);
                 

@@ -30,11 +30,11 @@ class GeminiClient {
     _getApiKey() {
         try {
             const decrypted = decryptApiKey(this.encryptedApiKey);
-            return (decrypted && decrypted.startsWith('AIza')) ? decrypted : '';
+            return decrypted ? decrypted.trim() : '';
         } catch (e) { return ''; }
     }
 
-    async generateText(prompt, systemPrompt = null, maxRetries = 3) {
+    async generateText(prompt, systemPrompt = null, maxRetries = 5) {
         const apiKey = this._getApiKey();
         if (!apiKey) throw new Error("API Key is missing.");
 
@@ -54,9 +54,7 @@ class GeminiClient {
             try {
                 const response = await fetch(url, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(requestBody)
                 });
 
@@ -72,7 +70,6 @@ class GeminiClient {
                 try {
                     return data.candidates[0].content.parts[0].text;
                 } catch (e) {
-                    console.error("Unexpected response structure:", data);
                     throw new Error("Fatal: Could not parse AI response.");
                 }
 
@@ -83,8 +80,16 @@ class GeminiClient {
                     throw error; 
                 }
 
-                const waitTime = Math.pow(2, attempt) * 1000; 
-                console.log(`[GeminiClient] Quota/Server error. Waiting ${waitTime / 1000} seconds before retrying...`);
+                let waitTime = Math.pow(2, attempt) * 1000;
+
+                const timeMatch = error.message.match(/retry in (\d+\.?\d*)s/);
+                
+                if (timeMatch && timeMatch[1]) {
+                    const requestedSeconds = parseFloat(timeMatch[1]);
+                    waitTime = (requestedSeconds * 1000) + 1500; 
+                }
+
+                console.log(`[GeminiClient] Waiting ${(waitTime / 1000).toFixed(1)} seconds before Attempt ${attempt + 1}...`);
                 
                 await new Promise(resolve => setTimeout(resolve, waitTime));
             }
