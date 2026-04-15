@@ -23,8 +23,80 @@ let platformUsername = '';
 let gitlabToken = '';
 let gitlabHelper = null;
 
-function allIncluded(outputTarget = 'email') {
-	// Always re-instantiate gitlabHelper for gitlab platform to ensure fresh cache after refresh
+async function enhanceReportWithAI(rawReportText) {
+    console.log("[DEBUG] Inside enhanceReportWithAI...");
+
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['aiSummary', 'aiTone', 'aiApiKey'], async (result) => {
+            if (!result.aiSummary || !result.aiApiKey) {
+                resolve(rawReportText);
+                return;
+            }
+
+            try {
+                const aiClient = new window.GeminiClient(result.aiApiKey);
+                const tone = result.aiTone ? result.aiTone.toLowerCase() : 'casual';
+                
+                const safeReportData = cleanAndTrimRawData(rawReportText);
+
+                const currentDate = new Date().toLocaleDateString('en-US', { 
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+                });
+
+                let personaPrompt = "";
+                let tonePrompt = "";
+
+                switch (tone) {
+                    case 'official':
+                        personaPrompt = "You are an engineering professional providing a formal, structured status report to stakeholders and management.";
+                        tonePrompt = "Use a highly formal, objective, and corporate tone. Speak in the first person ('I'). Focus on business value. **CRITICAL: You MUST use specific calendar dates (e.g., 'On April 10th') when referring to completed work.**";
+                        break;
+                    case 'concise':
+                        personaPrompt = "You are a highly efficient developer providing a rapid, no-nonsense daily update.";
+                        tonePrompt = "Be ruthlessly brief and direct. Strip out all filler words. Use the absolute minimum number of words necessary. Speak in the first person ('I'). **Dates are optional; you may omit them entirely.**";
+                        break;
+                    case 'casual':
+                    default:
+                        personaPrompt = "You are a friendly, collaborative team member giving your daily standup update.";
+                        tonePrompt = "Use a relaxed, natural, and conversational tone. Speak as if you are giving a quick update to your close team on Slack. **Translate absolute dates into relative, conversational timeframes based on today's date.**";
+                        break;
+                }
+
+                const systemPrompt = `${personaPrompt} Your goal is to transform the provided input into a polished daily report. 
+                
+                CURRENT DATE CONTEXT: Today is ${currentDate}. You MUST compare the dates in the input against this current date to accurately determine timeframes.
+                
+                STRICT RULES:
+                1. TONE & DATES: ${tonePrompt}
+                2. DRAFT PARSING (CRITICAL): The input text may already look like a report with headers like "TODAY / PLANNED:" or "BLOCKERS:". **You MUST read the text under these headers. Do not ignore what the user typed. Rewrite their notes into the requested tone.**
+                3. GROUPING & TRANSLATION: Translate technical shorthand into clear sentences. Group all activities by repository/project. Combine multiple tasks for the same project into a single, flowing summary per project. Prefix this summary with the project name in brackets (e.g., "[frontend-app] I resolved spacing issues...").
+                4. FORMAT: DO NOT use Markdown. Use PLAIN TEXT ONLY. Use ALL CAPS for headers and a simple dash (-) for list items.
+                5. STRUCTURE:
+                COMPLETED WORK:
+                - [Project Name A] (Combined summary of completed work)
+                TODAY / PLANNED:
+                - (Rewrite the user's notes from the draft here. Keep their project names if provided. If the user wrote absolutely nothing for today, say "No specific tasks planned yet.")
+                BLOCKERS:
+                - (Rewrite the user's blockers from the draft here. If none, say "No blockers / None")
+                6. ACCURACY: Do not add any new tasks or technologies not mentioned in the input. Remove raw technical noise unless absolutely necessary.`;
+                
+                console.log(`Requesting AI enhancement with tone: ${tone}...`);
+                
+                const userPrompt = `Input Data/Draft to process:\n\n${safeReportData}`;
+                
+                const enhancedReport = await aiClient.generateText(userPrompt, systemPrompt);
+                
+                console.log("AI summary successfully generated.");
+                resolve(enhancedReport);
+            } catch (error) {
+                console.error("AI Generation Error:", error);
+                resolve(`[AI Error: ${error.message}]\n\n${rawReportText}`);
+            }
+        });
+    });
+}
+
+async function allIncluded(outputTarget = 'email') {
 	if (platform === 'gitlab' || (typeof platform === 'undefined' && window.GitLabHelper)) {
 		gitlabHelper = new window.GitLabHelper();
 	}
@@ -32,6 +104,7 @@ function allIncluded(outputTarget = 'email') {
 		return;
 	}
 	scrumGenerationInProgress = true;
+
 	console.log('allIncluded called with outputTarget:', outputTarget);
 
 	let scrumBody = null;
@@ -1016,46 +1089,75 @@ function allIncluded(outputTarget = 'email') {
 			await writeGithubIssuesPrs(githubPrsReviewData?.items || []);
 		}
 		await writeGithubPrsReviews();
-		log('[DEBUG] Both data processing functions completed, generating scrum body');
-		if (subjectForEmail) {
-			// Synchronized subject and body injection for email
-			let lastWeekUl = '';
-            if (lastWeekArray.length === 0 && reviewedPrsArray.length === 0) {
-                lastWeekUl = '<div style="padding: 10px 0 10px 20px; color: #666; font-style: italic;">📭 No activity found for this period.</div>';
-            } else {
-                lastWeekUl = '<ul>';
-                for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
-                for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
-                lastWeekUl += '</ul>';
+        log('[DEBUG] Both data processing functions completed, generating scrum body');
+
+        let lastWeekUl = '';
+        if (lastWeekArray.length === 0 && reviewedPrsArray.length === 0) {
+            lastWeekUl = '<div style="padding: 10px 0 10px 20px; color: #666; font-style: italic;">📭 No activity found for this period.</div>';
+        } else {
+            lastWeekUl = '<ul>';
+            for (let i = 0; i < lastWeekArray.length; i++) lastWeekUl += lastWeekArray[i];
+            for (let i = 0; i < reviewedPrsArray.length; i++) lastWeekUl += reviewedPrsArray[i];
+            lastWeekUl += '</ul>';
+        }
+
+        let nextWeekUl = '<ul>';
+        for (let i = 0; i < nextWeekArray.length; i++) nextWeekUl += nextWeekArray[i];
+        nextWeekUl += '</ul>';
+
+        const weekOrDay = yesterdayContribution ? 'yesterday' : 'the period';
+        const weekOrDay2 = 'today';
+        
+        let content;
+        if (yesterdayContribution) {
+            content = `<b>1. What did I do ${weekOrDay}?</b><br>${lastWeekUl}<br><b>2. What do I plan to do ${weekOrDay2}?</b><br>${nextWeekUl}<br><b>3. What is blocking me from making progress?</b><br>${userReason}`;
+        } else {
+            content = `<b>1. What did I do from ${formatDate(startingDate)} to ${formatDate(endingDate)}?</b><br>${lastWeekUl}<br><b>2. What do I plan to do ${weekOrDay2}?</b><br>${nextWeekUl}<br><b>3. What is blocking me from making progress?</b><br>${userReason}`;
+        }
+
+        const storage = await chrome.storage.local.get(['aiSummary']);
+        if (storage.aiSummary) {
+            if (outputTarget === 'popup') {
+                const reportElement = document.getElementById('scrumReport');
+                if (reportElement) reportElement.innerHTML = "<i>AI is polishing your report...</i>";
             }
-			let nextWeekUl = '<ul>';
-			for (let i = 0; i < nextWeekArray.length; i++) nextWeekUl += nextWeekArray[i];
-			nextWeekUl += '</ul>';
-			const weekOrDay = yesterdayContribution ? 'yesterday' : 'the period';
-			const weekOrDay2 = 'today';
-			let content;
-			if (yesterdayContribution) {
-				content = `<b>1. What did I do ${weekOrDay}?</b><br>${lastWeekUl}<br><b>2. What do I plan to do ${weekOrDay2}?</b><br>${nextWeekUl}<br><b>3. What is blocking me from making progress?</b><br>${userReason}`;
-			} else {
-				content = `<b>1. What did I do from ${formatDate(startingDate)} to ${formatDate(endingDate)}?</b><br>${lastWeekUl}<br><b>2. What do I plan to do ${weekOrDay2}?</b><br>${nextWeekUl}<br><b>3. What is blocking me from making progress?</b><br>${userReason}`;
-			}
-			// Wait for both subject and body to be available, then inject both
-			let injected = false;
-			const interval = setInterval(() => {
-				const elements = window.emailClientAdapter?.getEditorElements();
-				if (elements && elements.subject && elements.body && !injected) {
-					elements.subject.value = subjectForEmail;
-					elements.subject.dispatchEvent(new Event('input', { bubbles: true }));
-					window.emailClientAdapter.injectContent(elements.body, content, elements.eventTypes.contentChange);
-					injected = true;
-					clearInterval(interval);
-				}
-			}, 200);
-			setTimeout(() => {
-				if (!injected) clearInterval(interval);
-			}, 30000);
-		} else {
-			writeScrumBody();
+            
+            console.log("Requesting AI enhancement...");
+            try {
+                content = await enhanceReportWithAI(content); 
+                console.log("AI Enhancement complete!");
+            } catch (aiError) {
+                console.error("AI failed, falling back to raw report:", aiError);
+            }
+        }
+
+        if (outputTarget === 'popup') {
+            const scrumReport = document.getElementById('scrumReport');
+            if (scrumReport) {
+                scrumReport.innerHTML = content;
+            }
+            
+            const generateBtn = document.getElementById('generateReport');
+            if (generateBtn) {
+                generateBtn.innerHTML = '<i class="fa fa-refresh"></i> Generate Report';
+                generateBtn.disabled = false;
+            }
+            scrumGenerationInProgress = false;
+        }
+
+        if (subjectForEmail) {
+            let injected = false;
+            const interval = setInterval(() => {
+                const elements = window.emailClientAdapter?.getEditorElements();
+                if (elements && elements.subject && elements.body && !injected) {
+                    elements.subject.value = subjectForEmail;
+                    elements.subject.dispatchEvent(new Event('input', { bubbles: true }));
+                    window.emailClientAdapter.injectContent(elements.body, content, elements.eventTypes.contentChange);
+                    injected = true;
+                    clearInterval(interval);
+                }
+            }, 200);
+            setTimeout(() => { if (!injected) clearInterval(interval); }, 30000);
 		}
 	}
 
@@ -1091,19 +1193,19 @@ function allIncluded(outputTarget = 'email') {
 		let content;
 		if (yesterdayContribution) {
 			content = `<b>1. What did I do ${weekOrDay}?</b><br>
-${lastWeekUl}<br>
-<b>2. What do I plan to do ${weekOrDay2}?</b><br>
-${nextWeekUl}<br>
-<b>3. What is blocking me from making progress?</b><br>
-${userReason}`;
+			${lastWeekUl}<br>
+			<b>2. What do I plan to do ${weekOrDay2}?</b><br>
+			${nextWeekUl}<br>
+			<b>3. What is blocking me from making progress?</b><br>
+			${userReason}`;
 		} else {
 			content = `<b>1. What did I do from ${formatDate(startingDate)} to ${formatDate(endingDate)}?</b><br>
-${lastWeekUl}<br>
-<b>2. What do I plan to do ${weekOrDay2}?</b><br>
-${nextWeekUl}<br>
-<b>3. What is blocking me from making progress?</b><br>
-${userReason}`;
-		}
+			${lastWeekUl}<br>
+			<b>2. What do I plan to do ${weekOrDay2}?</b><br>
+			${nextWeekUl}<br>
+			<b>3. What is blocking me from making progress?</b><br>
+			${userReason}`;
+					}
 
 		if (outputTarget === 'popup') {
 			const scrumReport = document.getElementById('scrumReport');
@@ -1862,8 +1964,9 @@ if (window.location.protocol.startsWith('http')) {
 		});
 }
 
-window.generateScrumReport = () => {
-	allIncluded('popup');
+window.generateScrumReport = async function() { 
+    console.log("Generating report...");
+    await allIncluded('popup'); 
 };
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

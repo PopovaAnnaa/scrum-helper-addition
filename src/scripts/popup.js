@@ -484,29 +484,29 @@ document.addEventListener('DOMContentLoaded', () => {
 		const generateBtn = document.getElementById('generateReport');
 		const copyBtn = document.getElementById('copyReport');
 
-		generateBtn.addEventListener('click', () => {
-			chrome.storage.local.get(['platform'], (result) => {
-				const platform = result.platform || 'github';
-				const platformUsernameKey = `${platform}Username`;
+		// generateBtn.addEventListener('click', () => {
+		// 	chrome.storage.local.get(['platform'], (result) => {
+		// 		const platform = result.platform || 'github';
+		// 		const platformUsernameKey = `${platform}Username`;
 
-				chrome.storage.local.set(
-					{
-						platform: platformSelect.value,
-						[platformUsernameKey]: platformUsername.value,
-					},
-					() => {
-						// Reload platform from storage before generating report
-						chrome.storage.local.get(['platform'], (res) => {
-							platformSelect.value = res.platform || 'github';
-							updatePlatformUI(platformSelect.value);
-							generateBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Generating...';
-							generateBtn.disabled = true;
-							window.generateScrumReport && window.generateScrumReport();
-						});
-					},
-				);
-			});
-		});
+		// 		chrome.storage.local.set(
+		// 			{
+		// 				platform: platformSelect.value,
+		// 				[platformUsernameKey]: platformUsername.value,
+		// 			},
+		// 			() => {
+		// 				// Reload platform from storage before generating report
+		// 				chrome.storage.local.get(['platform'], (res) => {
+		// 					platformSelect.value = res.platform || 'github';
+		// 					updatePlatformUI(platformSelect.value);
+		// 					generateBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Generating...';
+		// 					generateBtn.disabled = true;
+		// 					window.generateScrumReport && window.generateScrumReport();
+		// 				});
+		// 			},
+		// 		);
+		// 	});
+		// });
 
 		copyBtn.addEventListener('click', function () {
 			const scrumReport = document.getElementById('scrumReport');

@@ -2,47 +2,146 @@ const ENCRYPTION_SECRET = 'scrum_helper_secure_key';
 
 function encryptApiKey(text) {
     if (!text) return '';
-    let result = '';
-    for (let i = 0; i < text.length; i++) {
-        result += String.fromCharCode(text.charCodeAt(i) ^ ENCRYPTION_SECRET.charCodeAt(i % ENCRYPTION_SECRET.length));
-    }
-    return btoa(result);
+    const result = text.split('').map((char, i) => 
+        String.fromCharCode(char.charCodeAt(0) ^ ENCRYPTION_SECRET.charCodeAt(i % ENCRYPTION_SECRET.length))
+    ).join('');
+    return btoa(unescape(encodeURIComponent(result)));
 }
 
 function decryptApiKey(encodedText) {
     if (!encodedText) return '';
     try {
-        const text = atob(encodedText);
-        let result = '';
-        for (let i = 0; i < text.length; i++) {
-            result += String.fromCharCode(text.charCodeAt(i) ^ ENCRYPTION_SECRET.charCodeAt(i % ENCRYPTION_SECRET.length));
-        }
-        return result;
+        const decoded = decodeURIComponent(escape(atob(encodedText)));
+        return decoded.split('').map((char, i) => 
+            String.fromCharCode(char.charCodeAt(0) ^ ENCRYPTION_SECRET.charCodeAt(i % ENCRYPTION_SECRET.length))
+        ).join('');
     } catch (e) {
-        console.error("Failed to decrypt API Key");
+        console.error("Failed to decrypt API Key. Data might be in old format.");
         return '';
     }
 }
 
-async function verifyApiKeyWithProvider(apiKey) {
-    try {
-        const response = await fetch('https://api.openai.com/v1/models', {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`
+class GeminiClient {
+    constructor(encryptedApiKey, options = {}) {
+        this.encryptedApiKey = encryptedApiKey;
+        this.model = options.model || 'gemini-2.5-flash-lite'; 
+    }
+
+    _getApiKey() {
+        try {
+            const decrypted = decryptApiKey(this.encryptedApiKey);
+            return decrypted ? decrypted.trim() : '';
+        } catch (e) { return ''; }
+    }
+
+    async generateText(prompt, systemPrompt = null, maxRetries = 5) {
+        const apiKey = this._getApiKey();
+        if (!apiKey) throw new Error("API Key is missing.");
+
+        const url = `https://generativelanguage.googleapis.com/v1/models/${this.model}:generateContent?key=${apiKey}`;
+        
+        const requestBody = {
+            contents: [{
+                parts: [{ 
+                    text: systemPrompt 
+                        ? `${systemPrompt}\n\nTask: ${prompt}` 
+                        : prompt 
+                }]
+            }]
+        };
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    if (response.status === 429 || response.status >= 500) {
+                        throw new Error(`Retryable API Error: ${data.error?.message || response.statusText}`);
+                    }
+                    throw new Error(`Fatal Gemini Error: ${data.error?.message || response.statusText}`);
+                }
+                
+                try {
+                    return data.candidates[0].content.parts[0].text;
+                } catch (e) {
+                    throw new Error("Fatal: Could not parse AI response.");
+                }
+
+            } catch (error) {
+                console.error(`[GeminiClient] Attempt ${attempt} failed:`, error.message);
+                
+                if (attempt === maxRetries || error.message.includes('Fatal')) {
+                    throw error; 
+                }
+
+                let waitTime = Math.pow(2, attempt) * 1000;
+
+                const timeMatch = error.message.match(/retry in (\d+\.?\d*)s/);
+                
+                if (timeMatch && timeMatch[1]) {
+                    const requestedSeconds = parseFloat(timeMatch[1]);
+                    waitTime = (requestedSeconds * 1000) + 1500; 
+                }
+
+                console.log(`[GeminiClient] Waiting ${(waitTime / 1000).toFixed(1)} seconds before Attempt ${attempt + 1}...`);
+                
+                await new Promise(resolve => setTimeout(resolve, waitTime));
             }
-        });
-        
-        if (response.status === 401) {
-            return { isValid: false, error: "Invalid API Key. Please check your settings." };
-        } else if (response.status === 429) {
-            return { isValid: false, error: "Rate limit reached or insufficient balance on OpenAI." };
-        } else if (!response.ok) {
-            return { isValid: false, error: `API Error: ${response.status}` };
         }
+    }
+
+    async verifyKey() {
+        const apiKey = this._getApiKey();
+        if (!apiKey) return { isValid: false, error: "Key decryption failed." };
         
-        return { isValid: true };
-    } catch (error) {
-        return { isValid: false, error: "Network error. Please check your internet connection." };
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`);
+            return { isValid: response.ok, error: response.ok ? null : "Invalid Key" };
+        } catch (e) {
+            return { isValid: false, error: "Network error" };
+        }
     }
 }
+
+async function verifyApiKeyWithProvider(encryptedKey) {
+    console.log("Verifying AI API Key...");
+    const client = new GeminiClient(encryptedKey);
+    const result = await client.verifyKey();
+    
+    if (!result.isValid) {
+        console.error("Verification failed:", result.error);
+        throw new Error(result.error);
+    }
+    
+    console.log("API Key is valid.");
+    return true;
+}
+
+function cleanAndTrimRawData(rawText, maxCharacters = 30000) {
+    if (!rawText || typeof rawText !== 'string') return "No activity";
+
+    const cleanedLines = rawText.split('\n').map(line => {
+        return line.replace(/^[a-f0-9]{7,40}\s+/, '').trim();
+    }).filter(line => line !== '');
+
+    let formattedText = cleanedLines.join('\n');
+
+    if (formattedText.length > maxCharacters) {
+        console.warn("[Adapter] Data exceeded limit, truncating text...");
+        formattedText = formattedText.substring(0, maxCharacters) + '\n... [Remaining data truncated]';
+    }
+
+    return formattedText;
+}
+
+window.encryptApiKey = encryptApiKey;
+window.decryptApiKey = decryptApiKey;
+window.GeminiClient = GeminiClient;
+window.verifyApiKeyWithProvider = verifyApiKeyWithProvider;
+window.cleanAndTrimRawData = cleanAndTrimRawData;
