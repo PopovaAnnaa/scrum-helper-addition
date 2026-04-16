@@ -2218,3 +2218,4 @@ function filterDataByRepos(data, selectedRepos) {
 	return filteredData;
 }
 window.fetchUserRepositories = fetchUserRepositories;
+window.enhanceReportWithAI = enhanceReportWithAI;
