@@ -190,6 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			'showOpenLabel',
 			'showCommits',
 			'onlyIssues',
+			'onlyClosedIssues',
 			'onlyPRs',
 			'onlyRevPRs',
 			'onlyMergedPRs',
@@ -394,6 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		const showOpenLabelCheckbox = document.getElementById('showOpenLabel');
 		const showCommitsCheckbox = document.getElementById('showCommits');
 		const onlyIssuesCheckbox = document.getElementById('onlyIssues');
+		const onlyClosedIssuesCheckbox = document.getElementById('onlyClosedIssues');
 		const onlyPRsCheckbox = document.getElementById('onlyPRs');
 		const onlyRevPRsCheckbox = document.getElementById('onlyRevPRs');
 		const onlyMergedPRsCheckbox = document.getElementById('onlyMergedPRs')
@@ -416,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
 				'githubToken',
 				'cacheInput',
 				'onlyIssues',
+				'onlyClosedIssues',
 				'onlyPRs',
 				'onlyRevPRs',
 				'onlyMergedPRs',
@@ -440,6 +443,9 @@ document.addEventListener('DOMContentLoaded', () => {
 				if (typeof result.showCommits !== 'undefined') showCommitsCheckbox.checked = result.showCommits;
 				if (typeof result.onlyIssues !== 'undefined') {
 					onlyIssuesCheckbox.checked = result.onlyIssues;
+				}
+				if (typeof result.onlyClosedIssues !== 'undefined' && onlyClosedIssuesCheckbox) {
+					onlyClosedIssuesCheckbox.checked = result.onlyClosedIssues;
 				}
 				if (typeof result.onlyPRs !== 'undefined') {
 					onlyPRsCheckbox.checked = result.onlyPRs;
@@ -647,14 +653,38 @@ document.addEventListener('DOMContentLoaded', () => {
 				});
 			});
 
+			if (onlyClosedIssuesCheckbox) {
+                onlyClosedIssuesCheckbox.addEventListener('change', () => {
+                    const checked = onlyClosedIssuesCheckbox.checked;
+                    chrome.storage.local.set({ onlyClosedIssues: checked }, () => {
+                        if (checked) {
+                            if (onlyPRsCheckbox && onlyPRsCheckbox.checked) {
+                                onlyPRsCheckbox.checked = false;
+                                chrome.storage.local.set({ onlyPRs: false });
+                            }
+                            if (onlyMergedPRsCheckbox && onlyMergedPRsCheckbox.checked) {
+                                onlyMergedPRsCheckbox.checked = false;
+                                chrome.storage.local.set({ onlyMergedPRs: false });
+                            }
+                        }
+                    });
+                });
+            }
+
 			onlyPRsCheckbox.addEventListener('change', () => {
 				const checked = onlyPRsCheckbox.checked;
 				chrome.storage.local.set({ onlyPRs: checked }, () => {
-					if (checked && onlyIssuesCheckbox.checked) {
-						// Uncheck the previously selected "Only Issues"
-						onlyIssuesCheckbox.checked = false;
-						chrome.storage.local.set({ onlyIssues: false });
-					}
+					if (checked) {
+                        // Uncheck the previously selected "Only Issues" and "Only Closed Issues"
+                        if (onlyIssuesCheckbox.checked) {
+                            onlyIssuesCheckbox.checked = false;
+                            chrome.storage.local.set({ onlyIssues: false });
+                        }
+                        if (onlyClosedIssuesCheckbox && onlyClosedIssuesCheckbox.checked) {
+                            onlyClosedIssuesCheckbox.checked = false;
+                            chrome.storage.local.set({ onlyClosedIssues: false });
+                        }
+                    }
 				});
 			});
 
@@ -662,11 +692,17 @@ document.addEventListener('DOMContentLoaded', () => {
 				onlyMergedPRsCheckbox.addEventListener('change', () => {
 					const checked = onlyMergedPRsCheckbox.checked;
 					chrome.storage.local.set({ onlyMergedPRs: checked }, () => {
-						if (checked && onlyIssuesCheckbox.checked) {
-							// Uncheck the previously selected "Only Issues"
-							onlyIssuesCheckbox.checked = false;
-							chrome.storage.local.set({ onlyIssues: false });
-						}
+						if (checked) {
+                            // Uncheck the previously selected "Only Issues" and "Only Closed Issues"
+                            if (onlyIssuesCheckbox.checked) {
+                                onlyIssuesCheckbox.checked = false;
+                                chrome.storage.local.set({ onlyIssues: false });
+                            }
+                            if (onlyClosedIssuesCheckbox && onlyClosedIssuesCheckbox.checked) {
+                                onlyClosedIssuesCheckbox.checked = false;
+                                chrome.storage.local.set({ onlyClosedIssues: false });
+                            }
+                        }
 					});
 				});
 			}
@@ -676,11 +712,6 @@ document.addEventListener('DOMContentLoaded', () => {
 					chrome.storage.local.set({ onlyRevPRs: onlyRevPRsCheckbox.checked });
 				});
 			}
-			if (onlyMergedPRsCheckbox) {
-            onlyMergedPRsCheckbox.addEventListener('change', () => {
-                chrome.storage.local.set({ onlyMergedPRs: onlyMergedPRsCheckbox.checked });
-            });
-        }
 		}
 		showCommitsCheckbox.addEventListener('change', () => {
 			chrome.storage.local.set({ showCommits: showCommitsCheckbox.checked });
