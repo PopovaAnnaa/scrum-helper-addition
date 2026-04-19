@@ -7,7 +7,6 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"ignore": ["tests/**"],
 		"includes": [
 			"src/**/*.js",
 			"docs/**",
