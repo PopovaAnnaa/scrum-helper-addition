@@ -260,3 +260,55 @@ describe('onlyClosedIssues – end-to-end filtering pipeline', () => {
 		expect(result.map((i) => i.number)).toEqual([2]);
 	});
 });
+
+describe('onlyClosedIssues filter – GitLab', () => {
+	const start = new Date('2026-04-10T00:00:00Z');
+	const end = new Date('2026-04-17T23:59:59Z');
+	const onlyClosedFlags = {
+		onlyIssues: false, onlyPRs: false, onlyRevPRs: false,
+		onlyMergedPRs: false, onlyClosedIssues: true,
+	};
+
+	test('GitLab MR excluded when onlyClosedIssues active', () => {
+		const mr = makeGitLabMR();
+		expect(shouldIncludeWithFilters(mr, onlyClosedFlags, 'gitlab').include).toBe(false);
+	});
+
+	test('GitLab issue with state "opened" → rejected by filter', () => {
+		const issue = makeGitLabIssue({ state: 'opened' });
+		expect(filterClosedIssue(issue, true, start, end)).toBe(false);
+	});
+
+	test('GitLab closed issue within date range → included', () => {
+		const issue = makeGitLabIssue({
+			state: 'closed',
+			closed_at: '2026-04-14T16:30:00Z',
+		});
+		expect(filterClosedIssue(issue, true, start, end)).toBe(true);
+	});
+
+	test('GitLab closed issue outside date range → excluded', () => {
+		const issue = makeGitLabIssue({
+			state: 'closed',
+			closed_at: '2026-04-08T12:00:00Z',
+		});
+		expect(filterClosedIssue(issue, true, start, end)).toBe(false);
+	});
+
+	test('end-to-end: mixed GitLab items → only closed issues in range survive', () => {
+		const items = [
+			makeGitLabMR({ iid: 1 }),
+			makeGitLabIssue({ iid: 2, state: 'opened' }),
+			makeGitLabIssue({ iid: 3, state: 'closed', closed_at: '2026-04-14T10:00:00Z' }),
+			makeGitLabIssue({ iid: 4, state: 'closed', closed_at: '2026-04-02T10:00:00Z' }),
+		];
+		const normalized = normalizeMutualExclusivity(onlyClosedFlags);
+		const result = items.filter((item) => {
+			const { include, isMR } = shouldIncludeWithFilters(item, normalized, 'gitlab');
+			if (!include) return false;
+			if (!isMR) return filterClosedIssue(item, normalized.onlyClosedIssues, start, end);
+			return true;
+		});
+		expect(result.map((i) => i.iid)).toEqual([3]);
+	});
+});
