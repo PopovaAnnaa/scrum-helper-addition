@@ -72,4 +72,27 @@ describe('Integration: enhanceReportWithAI', () => {
         
         expect(result).toBe(input);
     });
+
+    test('використовує стислий тон (concise) та містить дату', async () => {
+        chrome.storage.local.get.mockImplementation((keys, callback) => {
+            callback({
+                aiSummary: true,
+                aiApiKey: window.encryptApiKey('key'),
+                aiTone: 'concise'
+            });
+        });
+
+        global.fetch.mockResolvedValue({
+            ok: true,
+            json: async () => ({ candidates: [{ content: { parts: [{ text: 'OK' }] } }] })
+        });
+
+        await window.enhanceReportWithAI("data");
+
+        const requestBody = JSON.parse(global.fetch.mock.calls[0][1].body);
+        const systemPrompt = requestBody.contents[0].parts[0].text;
+
+        expect(systemPrompt).toContain('ruthlessly brief'); 
+        expect(systemPrompt).toContain(new Date().getFullYear().toString());
+    });
 });

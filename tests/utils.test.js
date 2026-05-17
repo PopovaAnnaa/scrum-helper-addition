@@ -24,4 +24,13 @@ describe('Utility Functions', () => {
         const cleaned = cleanAndTrimRawData(raw);
         expect(cleaned).toBe("Fix login issue\nAdd logout");
     });
+
+    test('cleanAndTrimRawData обрізає текст, якщо він перевищує ліміт', () => {
+        const limit = 10;
+        const longText = 'a'.repeat(50);
+        const result = window.cleanAndTrimRawData(longText, limit);
+
+        expect(result.length).toBeLessThan(100); 
+        expect(result).toContain('... [Remaining data truncated]');
+    });
 });

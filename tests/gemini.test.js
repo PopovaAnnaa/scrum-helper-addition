@@ -51,4 +51,31 @@ describe('GeminiClient', () => {
         await expect(client.generateText('hello'))
             .rejects.toThrow('Fatal Gemini Error: Invalid API Key');
     });
+
+    test('GeminiClient робить повторну спробу при помилці 429', async () => {
+        jest.useFakeTimers();
+        
+        global.fetch
+            .mockResolvedValueOnce({
+                ok: false,
+                status: 429,
+                json: async () => ({ error: { message: 'Rate limit' } })
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    candidates: [{ content: { parts: [{ text: 'Success' }] } }]
+                })
+            });
+
+        const promise = client.generateText('test');
+        
+        await jest.runAllTimersAsync();
+        
+        const result = await promise;
+        expect(result).toBe('Success');
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        
+        jest.useRealTimers();
+    });
 });
