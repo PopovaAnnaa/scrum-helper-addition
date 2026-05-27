@@ -108,6 +108,43 @@ Both filters have comprehensive Jest test suites. Because the extension runs in 
 
 ---
 
+## ✅ Completed Goals By Shkuratovska Daria
+
+My objective was to design and implement customizable filtering layers that allow users to exclude irrelevant repositories and isolate specific tasks based on metadata:
+
+| Goal | Status |
+|---|---|
+| **Clean & Readable UI** for filters inside `popup.html` | ✅ Done |
+| **Dynamic Repository Loader** (Fetches user's active repos into select dropdown) | ✅ Done |
+| **Stage 1: Repository Exclusion** (Removes specific projects from the final report) | ✅ Done |
+| **Stage 2: Label Filtering** (Matches official GitHub Labels like `bug`, `ui`) | ✅ Done |
+| **Stage 2: Keyword Filtering** (Case-insensitive title/body scan) | ✅ Done |
+| **State persistence** via `chrome.storage.local` | ✅ Done |
+| **Combined Filtering Architecture** (Logical AND/OR combination for flexible search) | ✅ Done |
+
+---
+
+## 🛠️ Work Completed
+
+### Filter 1: Repository Exclusion System (Stage 1)
+
+**What it does:** Allows users to explicitly select and block specific Git repositories from appearing in the final scrum report. This is crucial for developers who commit to minor or secondary projects but don't want them in their main daily standup report.
+
+#### Implementation breakdown:
+- **UI Integration:** Built a sleek dropdown selector (`<select>`) that dynamically populates with the user's actual available repositories, accompanied by an "Add" action button and an active visual blocklist (`<ul>`).
+- **Storage Logic:** The list of excluded repositories is securely written to and read from `chrome.storage.local`, ensuring settings persist when the popup closes.
+- **Filtering Engine:** Enhanced `filterEvents()` in `scrumHelper.js`. It extracts the full name of the repository from `item.repository_url` and drops the item immediately if it matches the blocklist.
+
+### Filter 2: Metadata & Content Filter (Stage 2)
+
+**What it does:** Fine-tunes the report by filtering tasks via official labels (e.g., `bug`, `documentation`) or specific keywords in the title/description (e.g., `fix`, `refactor`). If enabled, only matching tasks pass through.
+
+#### Implementation breakdown:
+- **UI Refactoring:** Designed a dedicated, high-contrast configuration card inside `popup.html`. Removed noisy icons for maximum readability, upgrading input controls to standard typography (`text-sm`) with responsive saving indicators.
+- **Label Matching Engine:** Implemented `hasRequiredLabels()` to parse GitHub's nested array of label objects. It sanitizes inputs using `.trim().toLowerCase()` to prevent casing errors.
+- **Keyword Scan Engine:** Implemented `hasRequiredKeywords()`, executing a deep case-insensitive search across both `item.title` and `item.body` (handling null text safety).
+- **Logical Integration:** Engineered an advanced fallback mechanism. If both labels and keywords are provided, they operate on an **OR** basis, ensuring vital cross-referenced tasks are never lost.
+
 ## 📝 Summary
 
 In progress...
