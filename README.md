@@ -4,7 +4,7 @@
 
 **Organization:** FOSSASIA
 
-**Contributors:** *[Hryhorenko-Yeluzaveta](https://github.com/Hryhorenko-Yeluzaveta),*
+**Contributors:** *[Hryhorenko-Yeluzaveta](https://github.com/Hryhorenko-Yeluzaveta),* *[Popova-Anna](https://github.com/PopovaAnnaa),* *[Shkuratovska-Daria](https://github.com/witch1110),* 
 
 **Project Repo:** *https://github.com/fossasia/scrum_helper*
 
