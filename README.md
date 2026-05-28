@@ -145,6 +145,52 @@ My objective was to design and implement customizable filtering layers that allo
 - **Keyword Scan Engine:** Implemented `hasRequiredKeywords()`, executing a deep case-insensitive search across both `item.title` and `item.body` (handling null text safety).
 - **Logical Integration:** Engineered an advanced fallback mechanism. If both labels and keywords are provided, they operate on an **OR** basis, ensuring vital cross-referenced tasks are never lost.
 
+---
+
+## ✅ Completed Goals By Popova Anna
+
+My objective was to introduce an intelligent AI layer to the extension, enabling users to securely use their own API keys to automatically summarize raw Git activity into polished, stylized scrum reports using Gemini/OpenAI.
+
+| Goal | Status |
+| --- | --- |
+| **Secure UI Integration** for API keys and configuration | ✅ Done |
+| **Encrypted State Persistence** via `chrome.storage` | ✅ Done |
+| **Robust API Service Class** with error handling and retry logic | ✅ Done |
+| **Data Preparation Adapter** with text cleaning and token trimming | ✅ Done |
+| **Persona-Driven Prompt Engineering** (Official vs. Concise tones) | ✅ Done |
+| **Asynchronous Generation Workflow** with loading states and UX indicators | ✅ Done |
+| **Interactive Live Editing** and report regeneration | ✅ Done |
+
+---
+
+## 🛠️ Work Completed
+
+### Feature: AI-Powered Report Summarization
+
+**What it does:** Allows users to transform dense, cluttered lists of commits, PRs, and issues into cohesive, human-readable summaries. Users can provide their own API key, choose a preferred reporting tone, and review/edit the AI's output before finalizing their report.
+
+#### Implementation breakdown:
+
+**Stage 1: UI & Settings Architecture** 
+
+* **Layout & Styling (`popup.html`):** Designed and integrated a high-contrast UI component featuring secure fields for API key input, a dropdown selector for report tone (Official/Concise), and a master "AI Summary" toggle switch styled to blend with the native extension layout.
+* **Secure Storage (`main.js`):** Implemented data lifecycle logic to securely read/write configuration states to `chrome.storage`. Added front-end security measures including key masking and input obfuscation.
+* **Validation Layer:** Engineered real-time input validation to verify key formats and handle configuration errors gracefully before executing network requests.
+
+**Stage 2: AI Core & Data Adaptation** 
+
+* **API Service Layer (`aiService.js`):** Developed a modular, standalone class to orchestrate asynchronous HTTP queries to external LLM APIs (Gemini/OpenAI). Integrated robust handling for HTTP error codes and intelligent re-query/backoff logic.
+* **Data Preparation Adapter:** Created a formatting adapter that sanitizes raw Git JSON data—stripping out automated merge noise and "garbage" text—and structures it efficiently to stay well within API token windows.
+* **Prompt Engineering:** Crafted, benchmarked, and optimized targeted system prompts that enforce structural rules based on the user's selected tone preference (e.g., highly technical for "Official", ultra-scannable for "Concise").
+
+**Stage 3: Workflow Integration & UX** 
+
+* **Core Integration (`scrumHelper.js`):** Intercepted the legacy `allIncluded` data pipeline. Added conditional routing logic: if the AI toggle is active, data branches to the `aiService` pipeline; otherwise, it falls back gracefully to the legacy markdown generator.
+* **UX Enhancements:** Introduced responsive loading states, text alerts, and spinner indicators to keep the popup interface highly interactive and prevent perceived browser freezes during generation.
+* **Live Editing & Iteration:** Exposed a mutable text box for manual post-generation edits alongside a "Try again" regeneration action button.
+* **Comprehensive Testing:** Conducted 10+ hours of dedicated edge-case QA to optimize processing times across both massive data dumps and sparse, single-commit days.
+
+
 ## 📝 Summary
 
 In progress...
