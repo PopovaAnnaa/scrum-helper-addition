@@ -188,7 +188,6 @@ My objective was to introduce an intelligent AI layer to the extension, enabling
 * **Core Integration (`scrumHelper.js`):** Intercepted the legacy `allIncluded` data pipeline. Added conditional routing logic: if the AI toggle is active, data branches to the `aiService` pipeline; otherwise, it falls back gracefully to the legacy markdown generator.
 * **UX Enhancements:** Introduced responsive loading states, text alerts, and spinner indicators to keep the popup interface highly interactive and prevent perceived browser freezes during generation.
 * **Live Editing & Iteration:** Exposed a mutable text box for manual post-generation edits alongside a "Try again" regeneration action button.
-* **Comprehensive Testing:** Conducted 10+ hours of dedicated edge-case QA to optimize processing times across both massive data dumps and sparse, single-commit days.
 
 ---
 
@@ -200,7 +199,7 @@ The **Scrum Helper** extension has been successfully elevated from a raw data-fe
 
 * **Granular Activity Filtering:** Users can now filter reports strictly by merged pull requests and closed issues within specific date ranges, reducing noise for highly active contributors.
 * **Metadata & Repository Controls:** Added a dynamic repository exclusion blocklist alongside case-insensitive label and keyword scanning engines to isolate critical tasks instantly.
-* **AI-Powered Automation:** Integrated a secure, persona-driven LLM layer (Gemini/OpenAI) that transforms cluttered technical logs into polished, human-readable standup summaries with official or concise tones.
+* **AI-Powered Automation:** Integrated a secure, persona-driven LLM layer (Gemini) that transforms cluttered technical logs into polished, human-readable standup summaries with official or concise tones.
 * **Seamless UX & Cross-Browser Stability:** Maintained a clean user interface featuring secure storage persistence (`chrome.storage.local`), multilingual support (i18n), comprehensive Jest test coverage, and smooth fallback architectures.
 
 With these upgrades, Scrum Helper significantly reduces the manual friction of daily standup preparation, empowering developers across Chrome, Firefox, Edge, Brave, and Opera to generate precise, professional scrum reports in seconds.
