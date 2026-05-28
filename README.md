@@ -41,7 +41,7 @@ My task was to introduce **optional filtering controls** that let users fine-tun
 | Goal | Status |
 |---|---|
 | UI controls for both filters (checkboxes with tooltips) | ✅ Done |
-| i18n support (English, Russian, Ukrainian) | ✅ Done |
+| i18n support (English, Ukrainian) | ✅ Done |
 | Filter persistence via `chrome.storage.local` | ✅ Done |
 | GitHub filtering logic | ✅ Done |
 | GitLab filtering logic | ✅ Done |
