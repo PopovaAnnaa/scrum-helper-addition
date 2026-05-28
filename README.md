@@ -48,7 +48,7 @@ My task was to introduce **optional filtering controls** that let users fine-tun
 | Mutual exclusivity between conflicting filters | ✅ Done |
 | Date-range validation for closed issues | ✅ Done |
 | Empty-state message when no activity matches | ✅ Done |
-| Jest test suite for both filters (528+ lines) | ✅ Done |
+| Jest test suite for both filters | ✅ Done |
 
 ## 🛠️ Work Completed
 
